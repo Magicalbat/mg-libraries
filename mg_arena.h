@@ -130,7 +130,7 @@ MGA Implementation
 extern "C" {
 #endif
 
-#if defined(__linux__)
+#if defined(__linux__) || defined(__APPLE__)
 #    define MGA_PLATFORM_LINUX
 #elif defined(_WIN32)
 #    define MGA_PLATFORM_WIN32
@@ -233,10 +233,10 @@ mga_u32 _mga_mem_pagesize() {
 
 #ifdef MGA_PLATFORM_UNKNOWN
 
-void* _mga_mem_reserve(mga_u64 size) { return NULL }
-void _mga_mem_commit(void* ptr, mga_u64 size) { }
-void _mga_mem_decommit(void* ptr, mga_u64 size) { }
-void _mga_mem_release(void* ptr, mga_u64 size) { }
+void* _mga_mem_reserve(mga_u64 size) { MGA_UNUSED(size); return NULL; }
+void _mga_mem_commit(void* ptr, mga_u64 size) { MGA_UNUSED(ptr); MGA_UNUSED(size); }
+void _mga_mem_decommit(void* ptr, mga_u64 size) { MGA_UNUSED(ptr); MGA_UNUSED(size); }
+void _mga_mem_release(void* ptr, mga_u64 size) { MGA_UNUSED(ptr); MGA_UNUSED(size); }
 mga_u32 _mga_mem_pagesize(){ return 4096; }
 
 #endif // MGA_PLATFORM_UNKNOWN
