@@ -3,6 +3,8 @@
 TODO: Error handling
 TODO: Bounds checking
 TODO: Scratch arenas
+TODO: static / extern functions
+TODO: dll export functions
 
 */
 
