@@ -2,16 +2,24 @@ use std::{ffi::c_void, mem::ManuallyDrop};
 
 #[link(name = "mg_arena")]
 extern "C" {
+    /// Creates a new arena, returning a pointer to it.
     pub fn mga_create(desc: *const MGADesc) -> *mut MGArena;
+    /// Destroys an arena and frees its memory.
     pub fn mga_destroy(arena: *mut MGArena);
 
+    /// Allocates `size` bytes in the arena, returning a pointer to the beginning of the allocated memory.
     pub fn mga_push(arena: *mut MGArena, size: u64) -> *mut c_void;
+    /// Same as [mga_push], but it zeroes out the allocated memory first.
     pub fn mga_push_zero(arena: *mut MGArena, size: u64) -> *mut c_void;
 
+    /// Frees `size` bytes in the arena.
     pub fn mga_pop(arena: *mut MGArena, size: u64);
+    /// Frees all bytes after `pos`.
     pub fn mga_pop_to(arena: *mut MGArena, pos: u64);
 
+    /// Begins a temporary arena with the given arena.
     pub fn mga_temp_begin(arena: *mut MGArena) -> MGTempArena;
+    /// Ends a temporary arena with the given arena.
     pub fn mga_temp_end(temp: MGTempArena);
 }
 
@@ -26,13 +34,42 @@ pub struct MGArena {
     pub _backend: MGArenaBackend,
 }
 
+/// An arena descriptor, used to pass information for building the arena. This struct implements [Default], which you can use to fill in default arguments.
+/// 
+/// # Example
+/// 
+/// ```
+/// let desc = MGADesc {
+///     max_size: mga_mib(4),
+///     ..Default::default()
+/// };
+/// ```
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct MGADesc {
+    /// Maximum size of the arena, must be set or else the arena will be unable to allocate anything.
     pub max_size: u64,
+
+    /// The size of each page in the arena. Default is platform specific, but set to 4096 if on an unknown platofmr.
     pub page_size: u32,
+
+    /// The amount of pages per block in the arena, defaults to `min(max_size / page_size, 8)`.
     pub pages_per_block: u32,
+
+    /// The alignment, defaults to the size of a pointer `sizeof(void*)`.
     pub align: u32,
+}
+
+// Technically could be derived, but I'd rather be explicit
+impl Default for MGADesc {
+    fn default() -> Self {
+        MGADesc {
+            max_size: 0,
+            page_size: 0,
+            pages_per_block: 0,
+            align: 0,
+        }
+    }
 }
 
 #[repr(C)]
@@ -70,26 +107,32 @@ pub struct MGTempArena {
     pos: u64,
 }
 
+/// Returns number of bytes for given KB (1,000 bytes).
 pub const fn mga_kb(x: u64) -> u64 {
     x * 1_000
 }
 
+/// Returns number of bytes for given MB (1,000,000 bytes).
 pub const fn mga_mb(x: u64) -> u64 {
     x * 1_000_000
 }
 
+/// Returns number of bytes for given GB (1,000,000,000 bytes).
 pub const fn mga_gb(x: u64) -> u64 {
     x * 1_000_000_000
 }
 
+/// Returns number of bytes for given KiB (1,024 bytes).
 pub const fn mga_kib(x: u64) -> u64 {
     x << 10
 }
 
+/// Returns number of bytes for given MiB (1,048,576 bytes).
 pub const fn mga_mib(x: u64) -> u64 {
     x << 20
 }
 
+/// Returns number of bytes for given MiB (1,073,741,824 bytes).
 pub const fn mga_gib(x: u64) -> u64 {
     x << 30
 }

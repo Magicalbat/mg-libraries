@@ -7,8 +7,7 @@ where
 {
     let arena = unsafe { Arena::new(max_size) };
     func(arena);
-
-    // Arena is dropped here
+    // Arena gets dropped here.
 }
 
 pub struct Arena<'a> {
