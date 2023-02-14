@@ -14,7 +14,7 @@ MGA Header
  |  \/  |/ __| /_\   | || | __| /_\ |   \| __| _ \
  | |\/| | (_ |/ _ \  | __ | _| / _ \| |) | _||   /
  |_|  |_|\___/_/ \_\ |_||_|___/_/ \_\___/|___|_|_\
-                                                  
+
 ===================================================
 */
 
@@ -67,18 +67,24 @@ typedef struct {
 } _mga_reserve_arena;
 
 typedef enum {
-    MGA_INIT_FAILED,
-    MGA_COMMIT_FAILED,
-    MGA_OUT_OF_MEMORY
+    MGA_ERR_NONE,
+    MGA_ERR_INIT_FAILED,
+    MGA_ERR_COMMIT_FAILED,
+    MGA_ERR_OUT_OF_MEMORY
 } mga_error_code;
 typedef void (mga_error_callback)(mga_error_code code, char* msg);
 
 typedef struct {
+    mga_error_code code;
+    char* msg;
+} mga_error;
+
+typedef struct {
     mga_u64 pos;
 
-    mga_u64 size;
-    mga_u64 block_size;
-    mga_u32 align;
+    mga_u64 _size;
+    mga_u64 _block_size;
+    mga_u32 _align;
 
     union {
         _mga_malloc_arena _malloc_arena;
@@ -89,12 +95,14 @@ typedef struct {
 } mg_arena;
 
 typedef struct {
-    mga_u64 max_size;
+    mga_u64 desired_max_size;
     mga_u32 page_size;
     mga_u32 desired_block_size;
     mga_u32 align;
     mga_error_callback* error_callback;
 } mga_desc;
+
+mga_error mga_get_error();
 
 mg_arena* mga_create(const mga_desc* desc);
 void mga_destroy(mg_arena* arena);
@@ -114,7 +122,7 @@ void mga_reset(mg_arena* arena);
 
 typedef struct {
     mg_arena* arena;
-    mga_u64 pos;
+    mga_u64 _pos;
 } mg_temp_arena;
 
 mg_temp_arena mga_temp_begin(mg_arena* arena);
@@ -258,9 +266,15 @@ mga_u32 _mga_mem_pagesize(){ return 4096; }
 
 #endif // MGA_PLATFORM_UNKNOWN
 
+static mga_error last_error = { MGA_ERR_NONE, "" };
+
 static void _mga_empty_error_callback(mga_u32 code, char* msg) {
     MGA_UNUSED(code);
     MGA_UNUSED(msg);
+}
+
+mga_error mga_get_error() {
+    return last_error;
 }
 
 #ifdef MGA_FORCE_MALLOC
@@ -270,54 +284,68 @@ static void _mga_empty_error_callback(mga_u32 code, char* msg) {
 #define MGA_MIN_POS MGA_ALIGN_UP_POW2(sizeof(mg_arena), 64) 
 
 mg_arena* mga_create(const mga_desc* desc) {
-    mg_arena* out = MGA_MEM_RESERVE(desc->max_size);
-
+    mga_error_callback* error_callback = desc->error_callback == NULL ?
+        _mga_empty_error_callback : desc->error_callback;
+    
     mga_u32 page_size = desc->page_size == 0 ? _mga_mem_pagesize() : desc->page_size;
+    
+    if ((page_size & (page_size - 1)) != 0) {
+        last_error.code = MGA_ERR_INIT_FAILED;
+        last_error.msg = "Pagesize must be power of two";
+        error_callback(last_error.code, last_error.msg);
+    }
+    
+    mga_u64 max_size = MGA_ALIGN_UP_POW2(desc->desired_max_size, page_size);
     mga_u32 desired_block_size = desc->desired_block_size == 0 ? 
-        MGA_MIN(page_size * 8, desc->max_size) : desc->desired_block_size;
+        MGA_ALIGN_UP_POW2(max_size / 16, page_size) : desc->desired_block_size;
     mga_u32 block_size = MGA_ALIGN_UP_POW2(desired_block_size, page_size);
     
     mga_u32 align = desc->align == 0 ? (sizeof(void*)) : desc->align;
-
-    mga_error_callback* error_callback = desc->error_callback == NULL ?
-        _mga_empty_error_callback : desc->error_callback;
+    
+    mg_arena* out = MGA_MEM_RESERVE(max_size);
 
     if (!MGA_MEM_COMMIT(out, block_size)) {
-        error_callback(MGA_INIT_FAILED, "Failed to commit initial memory for arena");
+        last_error.code = MGA_ERR_INIT_FAILED;
+        last_error.msg = "Failed to commit initial memory for arena";
+        error_callback(last_error.code, last_error.msg);
         return NULL;
     }
 
     out->pos = MGA_ALIGN_UP_POW2(sizeof(mg_arena), 64);
-    out->size = desc->max_size;
-    out->block_size = block_size;
-    out->align = align;
+    out->_size = max_size;
+    out->_block_size = block_size;
+    out->_align = align;
     out->_reserve_arena.commit_pos = block_size;
     out->error_callback = error_callback;
 
     return out;
 }
 void mga_destroy(mg_arena* arena) {
-    MGA_MEM_RELEASE(arena, arena->size);
+    MGA_MEM_RELEASE(arena, arena->_size);
 }
 
 void* mga_push(mg_arena* arena, mga_u64 size) {
-    if (arena->pos + size > arena->size) {
-        arena->error_callback(MGA_OUT_OF_MEMORY, "Arena ran out of memory");
+    if (arena->pos + size > arena->_size) {
+        last_error.code = MGA_ERR_OUT_OF_MEMORY;
+        last_error.msg = "Arena ran out of memory";
+        arena->error_callback(last_error.code, last_error.msg);
         return NULL;
     }
 
-    mga_u64 pos_aligned = MGA_ALIGN_UP_POW2(arena->pos, arena->align);
+    mga_u64 pos_aligned = MGA_ALIGN_UP_POW2(arena->pos, arena->_align);
     void* out = (void*)((mga_u8*)arena + pos_aligned);
     arena->pos += size;
 
     mga_u64 commit_pos = arena->_reserve_arena.commit_pos;
     if (arena->pos > commit_pos) {
-        mga_u64 commit_unclamped = MGA_ALIGN_UP_POW2(pos_aligned, arena->block_size);
-        mga_u64 new_commit_pos = MGA_MIN(commit_unclamped, arena->size);
+        mga_u64 commit_unclamped = MGA_ALIGN_UP_POW2(pos_aligned, arena->_block_size);
+        mga_u64 new_commit_pos = MGA_MIN(commit_unclamped, arena->_size);
         mga_u64 commit_size = new_commit_pos - commit_pos;
 
         if (!MGA_MEM_COMMIT((void*)((mga_u8*)arena + commit_pos), commit_size)) {
-            arena->error_callback(MGA_COMMIT_FAILED, "Failed to commit memory");
+            last_error.code = MGA_ERR_COMMIT_FAILED;
+            last_error.msg = "Failed to commit memory";
+            arena->error_callback(last_error.code, last_error.msg);
             return NULL;
         }
 
@@ -336,7 +364,7 @@ void* mga_push_zero(mg_arena* arena, mga_u64 size) {
 void mga_pop(mg_arena* arena, mga_u64 size) {
     arena->pos = MGA_MAX(MGA_MIN_POS, arena->pos - size);
 
-    mga_u64 new_commit = MGA_MIN(arena->size, MGA_ALIGN_UP_POW2(arena->pos, arena->block_size));
+    mga_u64 new_commit = MGA_MIN(arena->_size, MGA_ALIGN_UP_POW2(arena->pos, arena->_block_size));
     mga_u64 commit_pos = arena->_reserve_arena.commit_pos;
 
     if (new_commit < commit_pos) {
@@ -358,11 +386,11 @@ void mga_reset(mg_arena* arena) {
 mg_temp_arena mga_temp_begin(mg_arena* arena) {
     return (mg_temp_arena){
         .arena = arena,
-        .pos = arena->pos
+        ._pos = arena->pos
     };
 }
 void mga_temp_end(mg_temp_arena temp) {
-    mga_pop_to(temp.arena, temp.pos);
+    mga_pop_to(temp.arena, temp._pos);
 }
 
 #ifdef __cplusplus

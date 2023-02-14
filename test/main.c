@@ -9,8 +9,8 @@ void err_callback(mga_error_code code, char* msg) {
 
 int main() {
     mg_arena* arena = mga_create(&(mga_desc){
-        .max_size = MGA_MiB(4),
-        .desired_block_size = MGA_KiB(64),
+        .desired_max_size = MGA_MiB(4),
+        .desired_block_size = MGA_KiB(128),
         .error_callback = err_callback
     });
 
@@ -19,7 +19,6 @@ int main() {
         nums[i] = i;
     }
 
-    unsigned char* data = (unsigned char*)mga_push_zero(arena, sizeof(unsigned char) * 128);
     mga_reset(arena);
 
     mga_destroy(arena);
