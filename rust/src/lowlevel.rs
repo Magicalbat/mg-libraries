@@ -6,9 +6,9 @@ pub struct UnsafeArena {
 }
 
 impl UnsafeArena {
-    pub unsafe fn new(size: u64) -> Self {
+    pub unsafe fn new(max_size: u64) -> Self {
         let desc = MGADesc {
-            max_size: size,
+            max_size,
             ..Default::default()
         };
 
@@ -58,7 +58,7 @@ impl Drop for UnsafeArena {
 mod tests {
     use super::*;
 
-    const ARENA_SIZE: u64 = mga_sys::mga_mib(4);
+    const ARENA_SIZE: u64 = crate::mib_to_bytes(1);
 
     fn create_arena() -> UnsafeArena {
         unsafe { UnsafeArena::new(ARENA_SIZE) }
@@ -118,6 +118,45 @@ mod tests {
             assert_eq!(*data, original);
             (*data)[1] = 0;
             assert_eq!(*data, [3, 0, 7]);
+        }
+    }
+
+    #[test]
+    fn alloc_zeroed() {
+        unsafe {
+            let mut arena = create_arena();
+
+            let data = arena.alloc_zeroed::<u32>();
+
+            assert_eq!(*data, 0);
+            *data = 1;
+            assert_eq!(*data, 1);
+        }
+    }
+
+    #[test]
+    fn alloc_slice() {
+        unsafe {
+            let mut arena = create_arena();
+
+            let my_slice = &[3, 3, 3, 5];
+            let data = arena.alloc_slice(my_slice);
+
+            assert_eq!(*data, my_slice[..]);
+            assert_eq!((*data).len(), 4);
+            (*data)[0] = 5;
+            assert_eq!(*data, [5, 3, 3, 5]);
+        }
+    }
+
+    #[test]
+    fn alloc_zeroed_slice() {
+        unsafe {
+            let mut arena = create_arena();
+
+            let data = arena.alloc_zeroed_slice::<u8>(7);
+
+            assert_eq!(*data, [0_u8; 7]);
         }
     }
 }
