@@ -1,6 +1,5 @@
 /*
 
-TODO: Error handling
 TODO: Bounds checking
 TODO: Scratch arenas
 TODO: static / extern functions
@@ -37,6 +36,8 @@ typedef uint16_t mga_u16;
 typedef uint32_t mga_u32;
 typedef uint64_t mga_u64;
 
+typedef mga_i32 mga_b32;
+
 #define MGA_KB(x) (mga_u64)((mga_u64)(x) * 1000)
 #define MGA_MB(x) (mga_u64)((mga_u64)(x) * 1000000)
 #define MGA_GB(x) (mga_u64)((mga_u64)(x) * 1000000000)
@@ -65,6 +66,13 @@ typedef struct {
     mga_u64 commit_pos;
 } _mga_reserve_arena;
 
+typedef enum {
+    MGA_INIT_FAILED,
+    MGA_COMMIT_FAILED,
+    MGA_OUT_OF_MEMORY
+} mga_error_code;
+typedef void (mga_error_callback)(mga_error_code code, char* msg);
+
 typedef struct {
     mga_u64 pos;
 
@@ -76,13 +84,16 @@ typedef struct {
         _mga_malloc_arena _malloc_arena;
         _mga_reserve_arena _reserve_arena;
     };
+
+    mga_error_callback* error_callback;
 } mg_arena;
 
 typedef struct {
     mga_u64 max_size;
     mga_u32 page_size;
-    mga_u32 pages_per_block;
+    mga_u32 desired_block_size;
     mga_u32 align;
+    mga_error_callback* error_callback;
 } mga_desc;
 
 mg_arena* mga_create(const mga_desc* desc);
@@ -93,6 +104,8 @@ void* mga_push_zero(mg_arena* arena, mga_u64 size);
 
 void mga_pop(mg_arena* arena, mga_u64 size);
 void mga_pop_to(mg_arena* arena, mga_u64 pos);
+
+void mga_reset(mg_arena* arena);
 
 #define MGA_PUSH_STRUCT(arena, type) (type*)mga_push(arena, sizeof(type))
 #define MGA_PUSH_ZERO_STRUCT(arena, type) (type*)mga_push_zero(arena, sizeof(type))
@@ -187,10 +200,12 @@ extern "C" {
 #include <Windows.h>
 
 void* _mga_mem_reserve(mga_u64 size) {
-    return VirtualAlloc(0, size, MEM_RESERVE, PAGE_READWRITE);
+    void* out = VirtualAlloc(0, size, MEM_RESERVE, PAGE_READWRITE);
+    return out;
 }
-void _mga_mem_commit(void* ptr, mga_u64 size) {
-    VirtualAlloc(ptr, size, MEM_COMMIT, PAGE_READWRITE);
+mga_b32 _mga_mem_commit(void* ptr, mga_u64 size) {
+    mga_b32 out = (VirtualAlloc(ptr, size, MEM_COMMIT, PAGE_READWRITE) != 0);
+    return out;
 }
 void _mga_mem_decommit(void* ptr, mga_u64 size) {
     VirtualFree(ptr, size, MEM_DECOMMIT);
@@ -213,10 +228,12 @@ mga_u32 _mga_mem_pagesize() {
 #include <unistd.h>
 
 void* _mga_mem_reserve(mga_u64 size) {
-    return mmap(NULL, size, PROT_NONE, MAP_SHARED | MAP_ANONYMOUS, -1, (off_t)0);
+    void* out = mmap(NULL, size, PROT_NONE, MAP_SHARED | MAP_ANONYMOUS, -1, (off_t)0);
+    return out;
 }
-void _mga_mem_commit(void* ptr, mga_u64 size) {
-    mprotect(ptr, size, PROT_READ | PROT_WRITE);
+mga_b32 _mga_mem_commit(void* ptr, mga_u64 size) {
+    mga_b32 out = (mprotect(ptr, size, PROT_READ | PROT_WRITE) == 0);
+    return out;
 }
 void _mga_mem_decommit(void* ptr, mga_u64 size) {
     mprotect(ptr, size, PROT_NONE);
@@ -233,13 +250,18 @@ mga_u32 _mga_mem_pagesize() {
 
 #ifdef MGA_PLATFORM_UNKNOWN
 
-void* _mga_mem_reserve(mga_u64 size) { return NULL }
-void _mga_mem_commit(void* ptr, mga_u64 size) { }
-void _mga_mem_decommit(void* ptr, mga_u64 size) { }
-void _mga_mem_release(void* ptr, mga_u64 size) { }
+void* _mga_mem_reserve(mga_u64 size) { MGA_UNUSED(size); return NULL; }
+void _mga_mem_commit(void* ptr, mga_u64 size) { MGA_UNUSED(ptr); MGA_UNUSED(size); }
+void _mga_mem_decommit(void* ptr, mga_u64 size) { MGA_UNUSED(ptr); MGA_UNUSED(size); }
+void _mga_mem_release(void* ptr, mga_u64 size) { MGA_UNUSED(ptr); MGA_UNUSED(size); }
 mga_u32 _mga_mem_pagesize(){ return 4096; }
 
 #endif // MGA_PLATFORM_UNKNOWN
+
+static void _mga_empty_error_callback(mga_u32 code, char* msg) {
+    MGA_UNUSED(code);
+    MGA_UNUSED(msg);
+}
 
 #ifdef MGA_FORCE_MALLOC
 // TODO
@@ -251,19 +273,26 @@ mg_arena* mga_create(const mga_desc* desc) {
     mg_arena* out = MGA_MEM_RESERVE(desc->max_size);
 
     mga_u32 page_size = desc->page_size == 0 ? _mga_mem_pagesize() : desc->page_size;
-    mga_u64 pages_per_block = desc->pages_per_block == 0 ?
-        MGA_MIN(8, desc->max_size / page_size) : desc->pages_per_block;
+    mga_u32 desired_block_size = desc->desired_block_size == 0 ? 
+        MGA_MIN(page_size * 8, desc->max_size) : desc->desired_block_size;
+    mga_u32 block_size = MGA_ALIGN_UP_POW2(desired_block_size, page_size);
+    
     mga_u32 align = desc->align == 0 ? (sizeof(void*)) : desc->align;
 
-    mga_u64 block_size = page_size * pages_per_block;
+    mga_error_callback* error_callback = desc->error_callback == NULL ?
+        _mga_empty_error_callback : desc->error_callback;
 
-    MGA_MEM_COMMIT(out, block_size);
+    if (!MGA_MEM_COMMIT(out, block_size)) {
+        error_callback(MGA_INIT_FAILED, "Failed to commit initial memory for arena");
+        return NULL;
+    }
 
     out->pos = MGA_ALIGN_UP_POW2(sizeof(mg_arena), 64);
     out->size = desc->max_size;
     out->block_size = block_size;
     out->align = align;
     out->_reserve_arena.commit_pos = block_size;
+    out->error_callback = error_callback;
 
     return out;
 }
@@ -273,6 +302,7 @@ void mga_destroy(mg_arena* arena) {
 
 void* mga_push(mg_arena* arena, mga_u64 size) {
     if (arena->pos + size > arena->size) {
+        arena->error_callback(MGA_OUT_OF_MEMORY, "Arena ran out of memory");
         return NULL;
     }
 
@@ -286,7 +316,12 @@ void* mga_push(mg_arena* arena, mga_u64 size) {
         mga_u64 new_commit_pos = MGA_MIN(commit_unclamped, arena->size);
         mga_u64 commit_size = new_commit_pos - commit_pos;
 
-        MGA_MEM_COMMIT((void*)((mga_u8*)arena + commit_pos), commit_size);
+        if (!MGA_MEM_COMMIT((void*)((mga_u8*)arena + commit_pos), commit_size)) {
+            arena->error_callback(MGA_COMMIT_FAILED, "Failed to commit memory");
+            return NULL;
+        }
+
+        arena->_reserve_arena.commit_pos = new_commit_pos;
     }
 
     return out;
@@ -314,6 +349,10 @@ void mga_pop_to(mg_arena* arena, mga_u64 pos) {
     mga_pop(arena, arena->pos - pos);
 }
 
+void mga_reset(mg_arena* arena) {
+    mga_pop_to(arena, MGA_MIN_POS);
+}
+
 #endif // NOT MGA_FORCE_MALLOC
 
 mg_temp_arena mga_temp_begin(mg_arena* arena) {
@@ -331,7 +370,6 @@ void mga_temp_end(mg_temp_arena temp) {
 #endif
 
 #endif // MG_ARENA_IMPL
-
 
 /*
 License
