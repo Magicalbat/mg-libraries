@@ -171,4 +171,17 @@ mod tests {
             assert_eq!(*data, [0_u8; 7]);
         }
     }
+
+    #[test]
+    fn alloc_tiny_arena() {
+        unsafe {
+            let mut arena = UnsafeArena::new(1);
+            
+            let byte = arena.alloc(1_u8);
+
+            assert_eq!(*byte, 1);
+            *byte = 5;
+            assert_eq!(*byte, 5);
+        }
+    }
 }
