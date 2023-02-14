@@ -1,4 +1,4 @@
-use mga_sys::{mga_create, mga_destroy, mga_push, mga_push_zero, MGADesc, MGArena};
+use mga_sys::{mga_create, mga_destroy, mga_push, mga_push_zero, MGADesc, MGArena, mga_reset};
 use std::mem;
 
 pub struct UnsafeArena {
@@ -43,6 +43,10 @@ impl UnsafeArena {
         let ptr = mga_push_zero(self.inner, size as u64) as *mut T;
 
         std::ptr::slice_from_raw_parts_mut(ptr, len)
+    }
+
+    pub unsafe fn reset(&mut self) {
+        mga_reset(self.inner);
     }
 }
 
