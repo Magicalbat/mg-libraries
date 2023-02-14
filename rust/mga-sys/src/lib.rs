@@ -1,4 +1,4 @@
-use std::{ffi::c_void, mem::ManuallyDrop};
+use std::{ffi::{c_void, c_char}, mem::ManuallyDrop};
 
 #[link(name = "mg_arena")]
 extern "C" {
@@ -60,6 +60,8 @@ extern "C" {
     /// Frees all bytes after `pos`.
     pub fn mga_pop_to(arena: *mut MGArena, pos: u64);
 
+    pub fn mga_reset(arena: *mut MGArena);
+
     /// Begins a temporary arena with the given arena.
     pub fn mga_temp_begin(arena: *mut MGArena) -> MGTempArena;
     /// Ends a temporary arena with the given arena.
@@ -76,6 +78,8 @@ pub struct MGArena {
     pub align: u32,
 
     pub _backend: MGArenaBackend,
+
+    pub error_callback: MGAErrorCallback,
 }
 
 /// An arena descriptor, used to pass information for building the arena. This struct implements [`Default`], which you can use to fill in default arguments.
@@ -98,10 +102,12 @@ pub struct MGADesc {
     pub page_size: u32,
 
     /// The amount of pages per block in the arena, defaults to `min(max_size / page_size, 8)`.
-    pub pages_per_block: u32,
+    pub desired_block_size: u32,
 
     /// The alignment, defaults to the size of a pointer `sizeof(void*)`.
     pub align: u32,
+
+    pub error_callback: MGAErrorCallback,
 }
 
 // Technically could be derived, but I'd rather be explicit
@@ -110,8 +116,9 @@ impl Default for MGADesc {
         MGADesc {
             max_size: 0,
             page_size: 0,
-            pages_per_block: 0,
+            desired_block_size: 0,
             align: 0,
+            error_callback: None,
         }
     }
 }
@@ -149,6 +156,16 @@ pub struct MGAMallocNode {
 pub struct MGAReserveArena {
     commit_pos: u64,
 }
+
+#[repr(C)]
+#[derive(Debug)]
+pub enum MGAErrorCode {
+    MGAInitFailed,
+    MGACommitFailed,
+    MGAOutOfMemory,
+}
+
+pub type MGAErrorCallback = Option<unsafe extern "C" fn(code: MGAErrorCode, msg: *mut c_char)>;
 
 /// A temporary arena, see [`mga_temp_begin`].
 #[repr(C)]

@@ -5,7 +5,7 @@ fn main() {
     unsafe {
         let desc = MGADesc {
             max_size: mga_mib(4),
-            pages_per_block: 8,
+            desired_block_size: 8,
 
             page_size: 0,
             align: 0,
