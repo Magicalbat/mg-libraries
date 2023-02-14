@@ -7,11 +7,14 @@ extern "C" {
     /// # Example
     ///
     /// ```
+    /// # use mga_sys::{mga_create, mga_destroy, MGADesc};
+    /// # unsafe {
     /// let arena = mga_create(&MGADesc::default() as *const MGADesc);
     ///
     /// // Do stuff
     ///
     /// mga_destroy(arena);
+    /// # }
     /// ```
     pub fn mga_create(desc: *const MGADesc) -> *mut MGArena;
 
@@ -25,6 +28,8 @@ extern "C" {
     /// # Example
     ///
     /// ```
+    /// # use mga_sys::*;
+    /// # unsafe {
     /// let arena = mga_create(&MGADesc::default() as *const MGADesc);
     ///
     /// let data = mga_push(arena, 1) as *mut u8;
@@ -35,6 +40,7 @@ extern "C" {
     /// }
     ///
     /// mga_destroy(arena);
+    /// # }
     /// ```
     pub fn mga_push(arena: *mut MGArena, size: u64) -> *mut c_void;
 
@@ -43,15 +49,16 @@ extern "C" {
     /// # Example
     ///
     /// ```
+    /// # use mga_sys::*;
+    /// # unsafe {
     /// let arena = mga_create(&MGADesc::default() as *const MGADesc);
     ///
     /// let data = mga_push_zero(arena, 1) as *mut u8;
     ///
-    /// unsafe {
-    ///     assert_eq!(*data, 0);
-    /// }
+    /// assert_eq!(*data, 0);
     ///
     /// mga_destroy(arena);
+    /// # }
     /// ```
     pub fn mga_push_zero(arena: *mut MGArena, size: u64) -> *mut c_void;
 
@@ -87,6 +94,8 @@ pub struct MGArena {
 /// # Example
 ///
 /// ```
+/// # use mga_sys::{MGADesc, mga_mib};
+/// #
 /// let desc = MGADesc {
 ///     max_size: mga_mib(4),
 ///     ..Default::default()
@@ -114,7 +123,7 @@ pub struct MGADesc {
 impl Default for MGADesc {
     fn default() -> Self {
         MGADesc {
-            max_size: 0,
+            max_size: mga_mib(1),
             page_size: 0,
             desired_block_size: 0,
             align: 0,

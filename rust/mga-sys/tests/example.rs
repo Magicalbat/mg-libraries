@@ -6,9 +6,7 @@ fn main() {
         let desc = MGADesc {
             max_size: mga_mib(4),
             desired_block_size: 8,
-
-            page_size: 0,
-            align: 0,
+            ..Default::default()
         };
 
         let arena = mga_create(&desc as *const MGADesc);
