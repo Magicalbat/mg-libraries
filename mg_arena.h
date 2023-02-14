@@ -37,18 +37,9 @@ typedef uint64_t mga_u64;
 
 typedef mga_i32 mga_b32;
 
-#define MGA_KB(x) (mga_u64)((mga_u64)(x) * 1000)
-#define MGA_MB(x) (mga_u64)((mga_u64)(x) * 1000000)
-#define MGA_GB(x) (mga_u64)((mga_u64)(x) * 1000000000)
-
 #define MGA_KiB(x) (mga_u64)((mga_u64)(x) << 10)
 #define MGA_MiB(x) (mga_u64)((mga_u64)(x) << 20)
 #define MGA_GiB(x) (mga_u64)((mga_u64)(x) << 30) 
-
-#define MGA_MIN(a, b) ((a) < (b) ? (a) : (b))
-#define MGA_MAX(a, b) ((a) > (b) ? (a) : (b))
-
-#define MGA_ALIGN_UP_POW2(x, b) (((x) + ((b) - 1)) & (~((b) - 1)))
 
 typedef struct _mga_malloc_node {
     mga_u64 size;
@@ -130,10 +121,10 @@ void mga_reset(mg_arena* arena);
 typedef struct {
     mg_arena* arena;
     mga_u64 _pos;
-} mg_temp_arena;
+} mga_temp;
 
-mg_temp_arena mga_temp_begin(mg_arena* arena);
-void mga_temp_end(mg_temp_arena temp);
+mga_temp mga_temp_begin(mg_arena* arena);
+void mga_temp_end(mga_temp temp);
 
 #ifdef __cplusplus
 }
@@ -216,6 +207,11 @@ extern "C" {
 #        error "Invalid compiler/version for thead variable; Define MGA_THREAD_VAR, use Clang, GCC, or MSVC, or use C11 or greater"
 #    endif
 #endif
+
+#define MGA_MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MGA_MAX(a, b) ((a) > (b) ? (a) : (b))
+
+#define MGA_ALIGN_UP_POW2(x, b) (((x) + ((b) - 1)) & (~((b) - 1)))
 
 #ifdef MGA_PLATFORM_WIN32
 
@@ -559,13 +555,13 @@ void mga_reset(mg_arena* arena) {
 
 #endif // NOT MGA_FORCE_MALLOC
 
-mg_temp_arena mga_temp_begin(mg_arena* arena) {
-    return (mg_temp_arena){
+mga_temp mga_temp_begin(mg_arena* arena) {
+    return (mga_temp){
         .arena = arena,
         ._pos = arena->_pos
     };
 }
-void mga_temp_end(mg_temp_arena temp) {
+void mga_temp_end(mga_temp temp) {
     mga_pop_to(temp.arena, temp._pos);
 }
 
