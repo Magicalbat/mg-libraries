@@ -6,13 +6,15 @@ pub struct UnsafeArena {
 }
 
 impl UnsafeArena {
-    pub unsafe fn new(max_size: u64) -> Self {
+    pub fn new(max_size: u64) -> Self {
+        assert!(max_size > 0, "Underlying C implementation will segfault if size is 0.");
+
         let desc = MGADesc {
             desired_max_size: max_size,
             ..Default::default()
         };
 
-        let arena = mga_create(&desc as *const MGADesc);
+        let arena = unsafe { mga_create(&desc as *const MGADesc) };
 
         UnsafeArena { inner: arena }
     }
@@ -65,13 +67,19 @@ mod tests {
     const ARENA_SIZE: u64 = crate::mib_to_bytes(1);
 
     fn create_arena() -> UnsafeArena {
-        unsafe { UnsafeArena::new(ARENA_SIZE) }
+        UnsafeArena::new(ARENA_SIZE)
     }
 
     #[test]
     fn new() {
         // Create and drop arena at the end of scope
         let _arena = create_arena();
+    }
+
+    #[test]
+    #[should_panic]
+    fn new_0_sized_arena() {
+        let _arena = UnsafeArena::new(0);
     }
 
     #[test]
