@@ -42,7 +42,6 @@ int main() {
 ```
 
 ### TODO
-- Linked list arenas with malloc
 - Documentation
 - Testing
 - Article about implementation
