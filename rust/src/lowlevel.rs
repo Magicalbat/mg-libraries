@@ -8,7 +8,7 @@ pub struct UnsafeArena {
 impl UnsafeArena {
     pub unsafe fn new(max_size: u64) -> Self {
         let desc = MGADesc {
-            max_size,
+            desired_max_size: max_size,
             ..Default::default()
         };
 

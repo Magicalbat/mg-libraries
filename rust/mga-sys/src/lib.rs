@@ -23,6 +23,8 @@ extern "C" {
     /// See [`mga_create`] for example.
     pub fn mga_destroy(arena: *mut MGArena);
 
+    pub fn mga_get_error() -> MGAError;
+
     /// Allocates `size` bytes in the arena, returning a pointer to the beginning of the allocated memory.
     ///
     /// # Example
@@ -80,9 +82,9 @@ extern "C" {
 pub struct MGArena {
     pub pos: u64,
 
-    pub size: u64,
-    pub block_size: u64,
-    pub align: u32,
+    pub _size: u64,
+    pub _block_size: u64,
+    pub _align: u32,
 
     pub _backend: MGArenaBackend,
 
@@ -97,7 +99,7 @@ pub struct MGArena {
 /// # use mga_sys::{MGADesc, mga_mib};
 /// #
 /// let desc = MGADesc {
-///     max_size: mga_mib(4),
+///     desired_max_size: mga_mib(4),
 ///     ..Default::default()
 /// };
 /// ```
@@ -105,7 +107,7 @@ pub struct MGArena {
 #[derive(Debug, Clone)]
 pub struct MGADesc {
     /// Maximum size of the arena, must be set or else the arena will be unable to allocate anything.
-    pub max_size: u64,
+    pub desired_max_size: u64,
 
     /// The size of each page in the arena. Default is platform specific, but set to 4096 if on an unknown platofmr.
     pub page_size: u32,
@@ -123,7 +125,7 @@ pub struct MGADesc {
 impl Default for MGADesc {
     fn default() -> Self {
         MGADesc {
-            max_size: mga_mib(1),
+            desired_max_size: mga_mib(1),
             page_size: 0,
             desired_block_size: 0,
             align: 0,
@@ -167,11 +169,18 @@ pub struct MGAReserveArena {
 }
 
 #[repr(C)]
+pub struct MGAError {
+    pub code: MGAErrorCode,
+    pub msg: *mut c_char,
+}
+
+#[repr(C)]
 #[derive(Debug)]
 pub enum MGAErrorCode {
-    MGAInitFailed,
-    MGACommitFailed,
-    MGAOutOfMemory,
+    None,
+    InitFailed,
+    CommitFailed,
+    OutOfMemory,
 }
 
 pub type MGAErrorCallback = Option<unsafe extern "C" fn(code: MGAErrorCode, msg: *mut c_char)>;
@@ -181,7 +190,7 @@ pub type MGAErrorCallback = Option<unsafe extern "C" fn(code: MGAErrorCode, msg:
 #[derive(Debug)]
 pub struct MGTempArena {
     arena: *mut MGArena,
-    pos: u64,
+    _pos: u64,
 }
 
 /// Returns number of bytes for given KB (1,000 bytes).

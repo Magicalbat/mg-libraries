@@ -4,7 +4,7 @@ use std::mem;
 fn main() {
     unsafe {
         let desc = MGADesc {
-            max_size: mga_mib(4),
+            desired_max_size: mga_mib(4),
             desired_block_size: 8,
             ..Default::default()
         };
