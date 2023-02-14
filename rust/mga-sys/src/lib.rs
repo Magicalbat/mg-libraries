@@ -3,54 +3,54 @@ use std::{ffi::c_void, mem::ManuallyDrop};
 #[link(name = "mg_arena")]
 extern "C" {
     /// Creates a new arena, returning a pointer to it.
-    /// 
+    ///
     /// # Example
-    /// 
+    ///
     /// ```
     /// let arena = mga_create(&MGADesc::default() as *const MGADesc);
-    /// 
+    ///
     /// // Do stuff
-    /// 
+    ///
     /// mga_destroy(arena);
     /// ```
     pub fn mga_create(desc: *const MGADesc) -> *mut MGArena;
 
     /// Destroys an arena and frees its memory.
-    /// 
+    ///
     /// See [`mga_create`] for example.
     pub fn mga_destroy(arena: *mut MGArena);
 
     /// Allocates `size` bytes in the arena, returning a pointer to the beginning of the allocated memory.
-    /// 
+    ///
     /// # Example
-    /// 
+    ///
     /// ```
     /// let arena = mga_create(&MGADesc::default() as *const MGADesc);
-    /// 
+    ///
     /// let data = mga_push(arena, 1) as *mut u8;
-    /// 
+    ///
     /// unsafe {
     ///     *data = 3;
     ///     assert_eq!(*data, 3);
     /// }
-    /// 
+    ///
     /// mga_destroy(arena);
     /// ```
     pub fn mga_push(arena: *mut MGArena, size: u64) -> *mut c_void;
 
     /// Same as [mga_push], but it zeroes out the allocated memory first.
-    /// 
+    ///
     /// # Example
-    /// 
+    ///
     /// ```
     /// let arena = mga_create(&MGADesc::default() as *const MGADesc);
-    /// 
+    ///
     /// let data = mga_push_zero(arena, 1) as *mut u8;
-    /// 
+    ///
     /// unsafe {
     ///     assert_eq!(*data, 0);
     /// }
-    /// 
+    ///
     /// mga_destroy(arena);
     /// ```
     pub fn mga_push_zero(arena: *mut MGArena, size: u64) -> *mut c_void;
@@ -79,9 +79,9 @@ pub struct MGArena {
 }
 
 /// An arena descriptor, used to pass information for building the arena. This struct implements [`Default`], which you can use to fill in default arguments.
-/// 
+///
 /// # Example
-/// 
+///
 /// ```
 /// let desc = MGADesc {
 ///     max_size: mga_mib(4),
@@ -117,9 +117,9 @@ impl Default for MGADesc {
 }
 
 /// A union that represents different backend kinds.
-/// 
+///
 /// # Implementation Note
-/// 
+///
 /// I added [`ManuallyDrop`] because it fixed a random error I was getting. I should go back later and try to find a better solution that I actually understand.
 #[repr(C)]
 pub union MGArenaBackend {
