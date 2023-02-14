@@ -1,5 +1,6 @@
 use mga::{self, lowlevel::UnsafeArena};
 
+#[test]
 fn main() {
     unsafe {
         let mut arena = UnsafeArena::new(mga::mib_to_bytes(1));

@@ -1,6 +1,7 @@
 use mga_sys::*;
 use std::mem;
 
+#[test]
 fn main() {
     unsafe {
         let desc = MGADesc {
