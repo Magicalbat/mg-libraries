@@ -82,11 +82,11 @@ extern "C" {
 pub struct MGArena {
     pub pos: u64,
 
-    pub _size: u64,
-    pub _block_size: u64,
-    pub _align: u32,
+    _size: u64,
+    _block_size: u64,
+    _align: u32,
 
-    pub _backend: MGArenaBackend,
+    _backend: MGArenaBackend,
 
     pub error_callback: MGAErrorCallback,
 }
@@ -141,16 +141,16 @@ impl Default for MGADesc {
 /// I added [`ManuallyDrop`] because it fixed a random error I was getting. I should go back later and try to find a better solution that I actually understand.
 #[repr(C)]
 pub union MGArenaBackend {
-    pub _malloc_arena: ManuallyDrop<MGAMallocArena>,
-    pub _reserve_arena: ManuallyDrop<MGAReserveArena>,
+    _malloc_arena: ManuallyDrop<MGAMallocArena>,
+    _reserve_arena: ManuallyDrop<MGAReserveArena>,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct MGAMallocArena {
-    first: *mut MGAMallocNode,
-    last: *mut MGAMallocNode,
-    num_nodes: u32,
+    pub first: *mut MGAMallocNode,
+    pub last: *mut MGAMallocNode,
+    pub num_nodes: u32,
 }
 
 /// Used by [`MGAMallocArena`].
@@ -165,7 +165,7 @@ pub struct MGAMallocNode {
 #[repr(C)]
 #[derive(Debug)]
 pub struct MGAReserveArena {
-    commit_pos: u64,
+    pub commit_pos: u64,
 }
 
 #[repr(C)]
@@ -189,7 +189,7 @@ pub type MGAErrorCallback = Option<unsafe extern "C" fn(code: MGAErrorCode, msg:
 #[repr(C)]
 #[derive(Debug)]
 pub struct MGTempArena {
-    arena: *mut MGArena,
+    pub arena: *mut MGArena,
     _pos: u64,
 }
 
