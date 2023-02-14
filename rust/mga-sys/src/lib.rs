@@ -91,6 +91,12 @@ pub struct MGArena {
     pub error_callback: MGAErrorCallback,
 }
 
+impl MGArena {
+    pub fn size(&self) -> u64 {
+        self._size
+    }
+}
+
 /// An arena descriptor, used to pass information for building the arena. This struct implements [`Default`], which you can use to fill in default arguments.
 ///
 /// # Example
