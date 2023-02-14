@@ -1,2 +1,7 @@
+.ccls-cache
+.replit
+main
+replit.nix
+
 # Apple stop leaking into my Git repos
 .DS_Store
