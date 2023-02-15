@@ -1,4 +1,8 @@
-use mga_sys::{mga_create, mga_destroy, mga_push, mga_push_zero, mga_reset, MGADesc, MGArena};
+use crate::ArenaResult;
+use mga_sys::{
+    mga_create, mga_destroy, mga_get_error, mga_push, mga_push_zero, mga_reset, MGADesc,
+    MGAErrorCode, MGArena,
+};
 use std::mem;
 
 pub struct UnsafeArena {
@@ -6,7 +10,7 @@ pub struct UnsafeArena {
 }
 
 impl UnsafeArena {
-    pub fn new(max_size: u64) -> Self {
+    pub fn new(max_size: u64) -> ArenaResult<Self> {
         assert!(
             max_size > 0,
             "Underlying C implementation will segfault if size is 0."
@@ -19,7 +23,14 @@ impl UnsafeArena {
 
         let arena = unsafe { mga_create(&desc as *const MGADesc) };
 
-        UnsafeArena { inner: arena }
+        let potential_error = unsafe { mga_get_error(arena) };
+
+        match potential_error.code {
+            MGAErrorCode::None => {}
+            _ => return Err(potential_error),
+        }
+
+        Ok(UnsafeArena { inner: arena })
     }
 
     pub unsafe fn alloc<T>(&mut self, data: T) -> *mut T {
@@ -70,7 +81,7 @@ mod tests {
     const ARENA_SIZE: u64 = crate::mib_to_bytes(1);
 
     fn create_arena() -> UnsafeArena {
-        UnsafeArena::new(ARENA_SIZE)
+        UnsafeArena::new(ARENA_SIZE).unwrap()
     }
 
     #[test]
@@ -82,7 +93,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn new_0_sized_arena() {
-        let _arena = UnsafeArena::new(0);
+        let _arena = UnsafeArena::new(0).unwrap();
     }
 
     #[test]
@@ -178,7 +189,7 @@ mod tests {
     #[test]
     fn alloc_tiny_arena() {
         unsafe {
-            let mut arena = UnsafeArena::new(1);
+            let mut arena = UnsafeArena::new(1).unwrap();
 
             let byte = arena.alloc(1_u8);
 

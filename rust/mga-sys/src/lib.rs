@@ -1,5 +1,7 @@
 use std::{
-    ffi::{c_char, c_void},
+    borrow::Cow,
+    ffi::{c_char, c_void, CStr},
+    fmt,
     mem::ManuallyDrop,
 };
 
@@ -186,11 +188,28 @@ pub struct MGAReserveBackend {
 #[repr(C)]
 pub struct MGAError {
     pub code: MGAErrorCode,
-    pub msg: *mut c_char,
+    pub msg: *const c_char,
+}
+
+impl MGAError {
+    /// Returns a [String] of the message, with invalid UTF-8 data replaced using
+    /// [CStr::to_string_lossy].
+    pub fn msg_to_str<'a>(&'a self) -> String {
+        unsafe { CStr::from_ptr(self.msg).to_string_lossy().into_owned() }
+    }
+}
+
+impl fmt::Debug for MGAError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        Ok(f.debug_struct("MGAError")
+            .field("code", &self.code)
+            .field("msg", &self.msg_to_str())
+            .finish()?)
+    }
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum MGAErrorCode {
     None = 0,
     InitFailed,
