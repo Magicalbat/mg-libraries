@@ -117,6 +117,7 @@ extern "C" {
 
 /// An arena that you can allocate data on, see [`mga_create`].
 #[repr(C)]
+#[derive(Debug)]
 pub struct MGArena {
     _pos: u64,
 
@@ -202,6 +203,13 @@ union MGArenaBackend {
     _reserve_arena: ManuallyDrop<MGAReserveBackend>,
 }
 
+/// Just debug as a non-exhaustive struct
+impl fmt::Debug for MGArenaBackend {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MGArenaBackend").finish_non_exhaustive()
+    }
+}
+
 #[repr(C)]
 #[derive(Debug)]
 struct MGAMallocBackend {
@@ -246,16 +254,16 @@ impl MGAError {
 // Uses .msg_to_str() instead of default implementation
 impl fmt::Debug for MGAError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        Ok(f.debug_struct("MGAError")
+        f.debug_struct("MGAError")
             .field("code", &self.code)
             .field("msg", &self.msg_to_string())
-            .finish()?)
+            .finish()
     }
 }
 
 /// An enum used to represent different kinds of errors.
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MGAErrorCode {
     /// No error occurred.
     None = 0,
