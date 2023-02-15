@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 use std::{
     ffi::{c_char, c_void, CStr},
     fmt,
