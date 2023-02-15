@@ -1,7 +1,7 @@
 #include <stdio.h>
 
 #define MG_ARENA_IMPL
-//#define MGA_FORCE_MALLOC
+#define MGA_FORCE_MALLOC
 #include "../mg_arena.h"
 
 // TODO: make actual tests

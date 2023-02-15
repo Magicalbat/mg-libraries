@@ -61,9 +61,9 @@ typedef enum {
     MGA_ERR_NONE = 0,
     MGA_ERR_INIT_FAILED,
     MGA_ERR_MALLOC_FAILED,
-    MGA_ERR_OUT_OF_NODES,
     MGA_ERR_COMMIT_FAILED,
-    MGA_ERR_OUT_OF_MEMORY
+    MGA_ERR_OUT_OF_MEMORY,
+    MGA_ERR_CANNOT_POP_MORE
 } mga_error_code;
 typedef void (mga_error_callback)(mga_error_code code, char* msg);
 
@@ -176,6 +176,11 @@ extern "C" {
 #    define MGA_MEM_PAGESIZE _mga_mem_pagesize
 #endif
 
+// This is needed for the size and block_size calculations
+#ifndef MGA_MEM_PAGESIZE
+#    define MGA_MEM_PAGESIZE _mga_mem_pagesize
+#endif
+
 #if !defined(MGA_MEM_RESERVE)
 #   define MGA_FORCE_MALLOC
 #endif
@@ -285,6 +290,19 @@ mga_u32 _mga_mem_pagesize(){ return 4096; }
 
 #endif // MGA_PLATFORM_UNKNOWN
 
+// https://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
+static mga_u32 _mga_round_pow2(mga_u32 v) {
+    v--;
+    v |= v >> 1;
+    v |= v >> 2;
+    v |= v >> 4;
+    v |= v >> 8;
+    v |= v >> 16;
+    v++;
+    
+    return v;
+}
+
 static void _mga_empty_error_callback(mga_u32 code, char* msg) {
     MGA_UNUSED(code);
     MGA_UNUSED(msg);
@@ -318,7 +336,9 @@ static _mga_init_data _mga_init_common(const mga_desc* desc) {
     out.max_size = MGA_ALIGN_UP_POW2(desc->desired_max_size, page_size);
     mga_u32 desired_block_size = desc->desired_block_size == 0 ? 
         MGA_ALIGN_UP_POW2(out.max_size / 8, page_size) : desc->desired_block_size;
-    out.block_size = MGA_ALIGN_UP_POW2(desired_block_size, page_size);
+    desired_block_size = MGA_ALIGN_UP_POW2(desired_block_size, page_size);
+    
+    out.block_size = _mga_round_pow2(desired_block_size);
     
     out.align = desc->align == 0 ? (sizeof(void*)) : desc->align;
     
@@ -354,7 +374,7 @@ mg_arena* mga_create(const mga_desc* desc) {
     out->_size = init_data.max_size;
     out->_block_size = init_data.block_size;
     out->_align = init_data.align;
-    out->_last_error = (mga_error){ .code=MGA_ERR_NONE, .mgs="" };
+    out->_last_error = (mga_error){ .code=MGA_ERR_NONE, .msg="" };
     out->error_callback = init_data.error_callback;
 
     out->_malloc_backend.cur_node = (_mga_malloc_node*)malloc(sizeof(_mga_malloc_node));
@@ -365,16 +385,18 @@ mg_arena* mga_create(const mga_desc* desc) {
         .data = (mga_u8*)malloc(out->_block_size)
     };
 
-    _mga_malloc_node* node = &out->_malloc_backend.cur_node;
-    node->size = out->_block_size;
-    node->data = (mga_u8*)malloc(node->size);
-
     return out;
 }
 void mga_destroy(mg_arena* arena) {
-    // TODO: free nodes
+    _mga_malloc_node* node = arena->_malloc_backend.cur_node;
+    while (node != NULL) {
+        free(node->data);
+
+        _mga_malloc_node* temp = node;
+        node = node->prev;
+        free(temp);
+    }
     
-    free(arena->_malloc_backend.node_arr);
     free(arena);
 }
 
@@ -386,76 +408,72 @@ void* mga_push(mg_arena* arena, mga_u64 size) {
         arena->error_callback(last_error.code, last_error.msg);
         return NULL;
     }
-    
-    _mga_malloc_node* node = &arena->_malloc_backend.node_arr[arena->_malloc_backend.cur_node];
-    
+
+    _mga_malloc_node* node = arena->_malloc_backend.cur_node;
+
     mga_u64 pos_aligned = MGA_ALIGN_UP_POW2(node->pos, arena->_align);
-    arena->_pos += size;
-    
-    if (pos_aligned + size >= node->size) {
-        mga_u64 node_size = MGA_ALIGN_UP_POW2(size, arena->_block_size);
-        arena->_malloc_backend.cur_node += 1;
+    mga_u32 diff = pos_aligned - node->pos;
+    arena->_pos += diff + size;
+
+    if (arena->_pos >= node->size) {
         
-        if (arena->_malloc_backend.cur_node >= arena->_malloc_backend.num_nodes) {
-            last_error.code = MGA_ERR_OUT_OF_NODES;
-            last_error.msg = "Arena ran out of nodes";
-            arena->_last_error = last_error;
-            arena->error_callback(last_error.code, last_error.msg);
+        mga_u64 unclamped_node_size = MGA_ALIGN_UP_POW2(size, arena->_block_size);
+        mga_u64 max_node_size = arena->_size - arena->_pos;
+        mga_u64 node_size = MGA_MIN(unclamped_node_size, max_node_size);
+        
+        _mga_malloc_node* new_node = (_mga_malloc_node*)malloc(sizeof(_mga_malloc_node));
+        mga_u8* data = (mga_u8*)malloc(node_size);
+
+        if (new_node == NULL || data == NULL) {
+            if (new_node != NULL) { free(new_node); }
+            if (data != NULL) { free(data); }
             
-            return NULL;
-        }
-        node = &arena->_malloc_backend.node_arr[arena->_malloc_backend.cur_node];
-        
-        node->size = node_size;
-        node->pos = size;
-        node->data = malloc(node_size);
-        
-        if (node->data == NULL) {
             last_error.code = MGA_ERR_MALLOC_FAILED;
-            last_error.msg = "Failed to malloc node";
+            last_error.msg = "Failed to malloc new node";
             arena->_last_error = last_error;
             arena->error_callback(last_error.code, last_error.msg);
-
             return NULL;
         }
 
-        return node->data;
-    }
+        new_node->pos = size;
+        new_node->size = node_size;
+        new_node->data = data;
+        
+        new_node->prev = node;
+        arena->_malloc_backend.cur_node = new_node;
 
+        return (void*)(new_node->data);
+    }
+    
     void* out = (void*)((mga_u8*)node->data + pos_aligned);
-    node->pos += size;
+    node->pos = pos_aligned + size;
 
     return out;
 }
 
 void mga_pop(mg_arena* arena, mga_u64 size) {
     if (size > arena->_pos) {
-        // TODO: error?
+        last_error.code = MGA_ERR_CANNOT_POP_MORE;
+        last_error.msg = "Attempted to pop too much memory";
+        arena->_last_error = last_error;
+        arena->error_callback(last_error.code, last_error.msg);
     }
     
     mga_u64 size_left = size;
-    mga_u32 node_index = arena->_malloc_backend.cur_node;
-    _mga_malloc_node* cur_node = &arena->_malloc_backend.node_arr[arena->_malloc_backend.cur_node];
+    _mga_malloc_node* node = arena->_malloc_backend.cur_node;
 
-    arena->_pos -= size;
+    while (size_left > node->pos) {
+        size_left -= node->pos;
+        
+        _mga_malloc_node* temp = node;
+        node = node->prev;
 
-    while (size_left > cur_node->pos) {
-        size_left -= cur_node->pos;
-
-        cur_node->pos = 0;
-        cur_node->size = 0;
-        free(cur_node->data);
-
-        cur_node -= 1;
-        node_index -= 1;
-
-        if (node_index < 0) {
-            // TODO: error
-        }
+        free(temp->data);
+        free(temp);
     }
 
-    cur_node->pos -= size_left;
-    arena->_malloc_backend.cur_node = node_index;
+    node->pos -= size_left;
+    arena->_pos -= size_left;
 }
 
 void mga_reset(mg_arena* arena) {
@@ -526,8 +544,11 @@ void* mga_push(mg_arena* arena, mga_u64 size) {
 }
 
 void mga_pop(mg_arena* arena, mga_u64 size) {
-    if (size > arena->_size - MGA_MIN_POS) {
-        // TODO: error?
+    if (size > arena->_pos - MGA_MIN_POS) {
+        last_error.code = MGA_ERR_CANNOT_POP_MORE;
+        last_error.msg = "Attempted to pop too much memory";
+        arena->_last_error = last_error;
+        arena->error_callback(last_error.code, last_error.msg);
     }
 
     arena->_pos = MGA_MAX(MGA_MIN_POS, arena->_pos - size);

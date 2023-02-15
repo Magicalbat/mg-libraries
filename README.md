@@ -88,13 +88,9 @@ mga_destroy(arena);
 
 ### Backends
 
-<<<<<<< Updated upstream
-`mg_arena` uses two different backends depending on the requirements of the application. There is a backend that uses `malloc` and `free`, and there is a backend that uses lower level functions like `VirtualAlloc` and `mmap`. 
-
 **NOTE: I recomend using the lower level one, unless you have a good reason not to.**
-=======
+
 `mg_arena` uses two different backends depending on the requirements of the application. There is a backend that uses `malloc` and `free`, and there is a backend that uses lower level functions like `VirtualAlloc` and `mmap`.**
->>>>>>> Stashed changes
 
 - [Typedefs](#typedefs)
 - [Enums](#enums)
@@ -103,6 +99,7 @@ mga_destroy(arena);
 - [Functions](#functions)
 - [Definitions and Options](#definitions-and-options)
 - [Custom Backends](#custom-backends)
+- [Error Handling](#error-handling)
 
 Typedefs
 --------
@@ -163,91 +160,60 @@ Macros
 
 Structs
 -------
-- `mg_arena` -- A memory arena
+- `mg_arena` - A memory arena
     - `mga_error_callback*` *error_callback*
         - Error callback function (See `mga_error_callback` for more detail)
     - *(all other properties should only be accessed through the getter functions below)*
-- `mga_error` -- An error
+- `mga_error` - An error
     - `mga_error_code` *code*
         - Error code (see `mga_error_code` for more detail)
     - `char*` *msg*
         - Error message as a c string
-- `mga_desc` -- initialization parameters for `mga_create`
+- `mga_desc` - initialization parameters for `mga_create`
     - This struct should be made with designated initializer. All uninitialized values (except for *desired_max_size*) will be given defaults.
     - `mga_u64` *desired_max_size*
-        - Maximum size of arena, rounded up to nearest *page_size*
+        - Maximum size of arena, rounded up to nearest page size
     - `mga_u32` *desired_block_size*
-        - Size of block in arena, rounded up to nearest *page_size*. For the malloc backend, a node will be a multiple of the block size. For the lower level backend, memory is committed in multiples of the block size. (See [Backends](#backends))
+        - Desired size of block in arena. The real block size will be rounded to the nearest page size, then reounded to the nearest power of 2. For the malloc backend, a node will be a multiple of the block size. For the lower level backend, memory is committed in multiples of the block size. (See [Backends](#backends))
     - `mga_u32` *align*
         - Size of memory alignment (See [this article](https://developer.ibm.com/articles/pa-dalign/) for rationality) to apply, **Must be power of 2**. To disable alignment, you can pass in a value of 1.
     - `mga_error_callback*` *error_callback*
         - Error callback function (See `mga_error_callback` for more detail)
-- `mga_temp` -- A temporary arena
+- `mga_temp` - A temporary arena
     - `mg_arena*` arena
         - The `mg_arena` object assosiated with the temporary arena
 
 
 Functions
 ---------
-- `mga_create` <br>
-    Creates a new `mg_arena` according to the mga_desc object.
-    - Parameter: `const mga_desc* desc`
-    - Returns: `mg_arena*`
-- `mga_destroy` <br>
-    Destroys an `mg_arena` object.
-    - Parameter: `mg_arena* arena`
-- `mga_get_error` <br>
-    Gets the last error from the given arena. If the arena is null, it will give the last error according to a static, thread local variable in the implementation.
-    - Parameter: `mg_arena* arena`
-        - Can be null (see above)
-    - Returns: `mga_error`
-- `mga_get_pos`
-    - Parameter: `mg_arena* arena`
-    - Returns: `mga_u64`
-- `mga_get_size`
-    - Parameter: `mg_arena* arena`
-    - Returns: `mga_u64`
-- `mga_get_block_size`
-    - Parameter: `mg_arena* arena`
-    - Returns: `mga_u32`
-- `mga_get_align`
-    - Parameter: `mg_arena* arena`
-    - Returns: `mga_u32`
-- `mga_push` <br>
-    Allocates new memory on the arena.
-    - Parameter: `mg_arena* arena`
-    - Parameter: `mga_u64 size`
-        - Size in bytes to be allocated
-    - Returns: `void*`
-- `mga_push_zero` <br>
-    Allocates and zeros new memory on the arena.
-    - Parameter: `mg_arena* arena`
-    - Parameter: `mga_u64 size`
-        - Size in bytes to be allocated
-    - Returns: `void*`
-- `mga_pop` <br>
-    Pops memory from the arena. <br>
-    **WARNING: Because of memory alignment, this may not always act as expected. Make sure you know what you are doing.**
-    - Parameter: `mg_arena* arena`
-    - Parameter: `mga_u64 size`
-        - Number of bytes to pop from arena
-- `mga_pop_to` <br>
-    Pops memory from the arena. <br>
-    **WARNING: Because of memory alignment, this may not always act as expected. Make sure you know what you are doing.**
-    - Parameter: `mg_arena* arena`
-    - Parameter: `mga_u64 pos`
-        - New position of arena. All memory from the current to the new position is deallocated.
-- `mga_reset` <br>
-    Deallocates all memory in arena, returning the arena to its original position.
-    - Parameter: `mg_arena* arena`
-- `mga_temp_begin` <br>
-    Creates a new temporary arena (`mga_temp`) from the given arena.
-    - Parameter: `mg_arena* arena`
-    - Returns: `mga_temp`
-- `mga_temp_end` <br>
-    Destroys the temporary arena, deallocating all allocations made with the temporary arena.
-    - Parameter: `mga_temp temp`
-
+- `mg_arena* mga_create(const mga_desc* desc)` <br>
+    - Creates a new `mg_arena` according to the mga_desc object.
+- `void mga_destroy(mg_arena* arena)` <br>
+    - Destroys an `mg_arena` object.
+- `mga_error mga_get_error(mg_arena* arena)` <br>
+    - Gets the last error from the given arena. **Arena can be NULL.** If the arena is null, it will give the last error according to a static, thread local variable in the implementation.
+- `mga_u64 mga_get_pos(mg_arena* arena)`
+- `mga_u64 mga_get_size(mg_arena* arena)`
+- `mga_u32 mga_get_block_size(mg_arena* arena)`
+- `mga_u32 mga_get_align(mg_arena* arena)`
+    - (See `mga_desc` for more detail about what these mean)
+- `void* mga_push(mg_arena* arena, mga_u64 size)`
+    - Allocates `size` bytes on the arena.
+- `void* mga_push_zero(mg_arena* arena, mga_u64 size)`
+    - Allocates `size` bytes on the arena and zeros the memory.
+- `void mga_pop(mg_arena* arena, mga_u64 size)`
+    - Pops `size` bytes from the arena.
+    - **WARNING: Because of memory alignment, this may not always act as expected. Make sure you know what you are doing.**
+- `void mga_pop_to(mg_arena* arena, mga_u64 pos)`
+    - Pops memory from the arena, setting the arenas position to `pos`.
+    - **WARNING: Because of memory alignment, this may not always act as expected. Make sure you know what you are doing.**
+- `void mga_reset(mg_arena* arena)`
+    - Deallocates all memory in arena, returning the arena to its original position.
+    - Note: Always use `mga_reset` instead of `mga_pop_to` if you need to clear all memory. Position 0 is not always the start of the arena. 
+- `mga_temp mga_temp_begin(mg_arena* arena)`
+    - Creates a new temporary arena from the given arena.
+- `void mga_temp_end(mga_temp temp)`
+    - Destroys the temporary arena, deallocating all allocations made with the temporary arena.
 
 Definitions and Options
 -----------------------
@@ -270,10 +236,14 @@ Define these above where you put the implementation. Example:
 - `MGA_THREAD_VAR`
     - Provide the implementation for creating a thread local variable if it is not supported.
 - `MGA_MEM_RESERVE` and related
-    - See below
+    - See [Custom Backends](#custom-backends)
 
 Custom Backends
 ---------------
+- TODO
+
+Error Handling
+--------------
 - TODO
 
 ### TODO
