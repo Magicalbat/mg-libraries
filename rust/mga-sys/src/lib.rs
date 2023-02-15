@@ -217,7 +217,7 @@ pub enum MGAErrorCode {
     OutOfMemory,
 }
 
-pub type MGAErrorCallback = Option<unsafe extern "C" fn(code: MGAErrorCode, msg: *mut c_char)>;
+pub type MGAErrorCallback = Option<unsafe extern "C" fn(code: MGAErrorCode, msg: *const c_char)>;
 
 /// A temporary arena, see [`mga_temp_begin`].
 #[repr(C)]
