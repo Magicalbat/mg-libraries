@@ -26,7 +26,12 @@ extern "C" {
     /// See [`mga_create`] for example.
     pub fn mga_destroy(arena: *mut MGArena);
 
-    pub fn mga_get_error() -> MGAError;
+    pub fn mga_get_error(arena: *mut MGArena) -> MGAError;
+
+    pub fn mga_get_pos(arena: *mut MGArena) -> u64;
+    pub fn mga_get_size(arena: *mut MGArena) -> u64;
+    pub fn mga_get_block_size(arena: *mut MGArena) -> u32;
+    pub fn mga_get_align(arena: *mut MGArena) -> u32;
 
     /// Allocates `size` bytes in the arena, returning a pointer to the beginning of the allocated
     /// memory.
@@ -76,15 +81,15 @@ extern "C" {
     pub fn mga_reset(arena: *mut MGArena);
 
     /// Begins a temporary arena with the given arena.
-    pub fn mga_temp_begin(arena: *mut MGArena) -> MGTempArena;
+    pub fn mga_temp_begin(arena: *mut MGArena) -> MGATemp;
     /// Ends a temporary arena with the given arena.
-    pub fn mga_temp_end(temp: MGTempArena);
+    pub fn mga_temp_end(temp: MGATemp);
 }
 
 /// An arena that you can allocate data on, see [`mga_create`].
 #[repr(C)]
 pub struct MGArena {
-    pub pos: u64,
+    _pos: u64,
 
     _size: u64,
     _block_size: u64,
@@ -92,6 +97,7 @@ pub struct MGArena {
 
     _backend: MGArenaBackend,
 
+    _last_error: MGAError,
     pub error_callback: MGAErrorCallback,
 }
 
@@ -121,10 +127,6 @@ pub struct MGADesc {
     /// anything.
     pub desired_max_size: u64,
 
-    /// The size of each page in the arena. Default is platform specific, but set to 4096 if on an
-    /// unknown platofmr.
-    pub page_size: u32,
-
     /// The amount of pages per block in the arena, defaults to `min(max_size / page_size, 8)`.
     pub desired_block_size: u32,
 
@@ -139,7 +141,6 @@ impl Default for MGADesc {
     fn default() -> Self {
         MGADesc {
             desired_max_size: mga_mib(1),
-            page_size: 0,
             desired_block_size: 0,
             align: 0,
             error_callback: None,
@@ -155,13 +156,13 @@ impl Default for MGADesc {
 /// and try to find a better solution that I actually understand.
 #[repr(C)]
 pub union MGArenaBackend {
-    _malloc_arena: ManuallyDrop<MGAMallocArena>,
-    _reserve_arena: ManuallyDrop<MGAReserveArena>,
+    _malloc_arena: ManuallyDrop<MGAMallocBackend>,
+    _reserve_arena: ManuallyDrop<MGAReserveBackend>,
 }
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct MGAMallocArena {
+pub struct MGAMallocBackend {
     pub first: *mut MGAMallocNode,
     pub last: *mut MGAMallocNode,
     pub num_nodes: u32,
@@ -171,14 +172,14 @@ pub struct MGAMallocArena {
 #[repr(C)]
 #[derive(Debug)]
 pub struct MGAMallocNode {
-    pub next: *mut MGAMallocNode,
+    pub size: u64,
     pub pos: u64,
     pub data: *mut u8,
 }
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct MGAReserveArena {
+pub struct MGAReserveBackend {
     pub commit_pos: u64,
 }
 
@@ -191,8 +192,10 @@ pub struct MGAError {
 #[repr(C)]
 #[derive(Debug)]
 pub enum MGAErrorCode {
-    None,
+    None = 0,
     InitFailed,
+    MallocFailed,
+    OutOfNodes,
     CommitFailed,
     OutOfMemory,
 }
@@ -202,24 +205,9 @@ pub type MGAErrorCallback = Option<unsafe extern "C" fn(code: MGAErrorCode, msg:
 /// A temporary arena, see [`mga_temp_begin`].
 #[repr(C)]
 #[derive(Debug)]
-pub struct MGTempArena {
+pub struct MGATemp {
     pub arena: *mut MGArena,
     _pos: u64,
-}
-
-/// Returns number of bytes for given KB (1,000 bytes).
-pub const fn mga_kb(x: u64) -> u64 {
-    x * 1_000
-}
-
-/// Returns number of bytes for given MB (1,000,000 bytes).
-pub const fn mga_mb(x: u64) -> u64 {
-    x * 1_000_000
-}
-
-/// Returns number of bytes for given GB (1,000,000,000 bytes).
-pub const fn mga_gb(x: u64) -> u64 {
-    x * 1_000_000_000
 }
 
 /// Returns number of bytes for given KiB (1,024 bytes).
