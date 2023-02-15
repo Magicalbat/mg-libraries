@@ -3,7 +3,7 @@ use mga::{self, lowlevel::UnsafeArena};
 #[test]
 fn main() {
     unsafe {
-        let mut arena = UnsafeArena::new(mga::mib_to_bytes(1));
+        let mut arena = UnsafeArena::new(mga::mib_to_bytes(1)).unwrap();
 
         let nums = arena.alloc_zeroed_slice::<u64>(64);
 

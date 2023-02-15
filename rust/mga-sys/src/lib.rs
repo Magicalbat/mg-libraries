@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     ffi::{c_char, c_void, CStr},
     fmt,
     mem::ManuallyDrop,
@@ -165,15 +164,14 @@ pub union MGArenaBackend {
 #[repr(C)]
 #[derive(Debug)]
 pub struct MGAMallocBackend {
-    pub first: *mut MGAMallocNode,
-    pub last: *mut MGAMallocNode,
-    pub num_nodes: u32,
+    pub cur_node: *mut MGAMallocBackend,
 }
 
 /// Used by [`MGAMallocArena`].
 #[repr(C)]
 #[derive(Debug)]
 pub struct MGAMallocNode {
+    pub prev: *mut MGAMallocNode,
     pub size: u64,
     pub pos: u64,
     pub data: *mut u8,
