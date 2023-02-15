@@ -20,19 +20,19 @@ extern "C" {
     /// mga_destroy(arena);
     /// # }
     /// ```
-    pub fn mga_create(desc: *const MGADesc) -> *mut MGArena;
+    pub fn mga_create(desc: *const MGADesc) -> *const MGArena;
 
     /// Destroys an arena and frees its memory.
     ///
     /// See [`mga_create`] for example.
-    pub fn mga_destroy(arena: *mut MGArena);
+    pub fn mga_destroy(arena: *const MGArena);
 
-    pub fn mga_get_error(arena: *mut MGArena) -> MGAError;
+    pub fn mga_get_error(arena: *const MGArena) -> MGAError;
 
-    pub fn mga_get_pos(arena: *mut MGArena) -> u64;
-    pub fn mga_get_size(arena: *mut MGArena) -> u64;
-    pub fn mga_get_block_size(arena: *mut MGArena) -> u32;
-    pub fn mga_get_align(arena: *mut MGArena) -> u32;
+    pub fn mga_get_pos(arena: *const MGArena) -> u64;
+    pub fn mga_get_size(arena: *const MGArena) -> u64;
+    pub fn mga_get_block_size(arena: *const MGArena) -> u32;
+    pub fn mga_get_align(arena: *const MGArena) -> u32;
 
     /// Allocates `size` bytes in the arena, returning a pointer to the beginning of the allocated
     /// memory.
@@ -54,7 +54,7 @@ extern "C" {
     /// mga_destroy(arena);
     /// # }
     /// ```
-    pub fn mga_push(arena: *mut MGArena, size: u64) -> *mut c_void;
+    pub fn mga_push(arena: *const MGArena, size: u64) -> *mut c_void;
 
     /// Same as [mga_push], but it zeroes out the allocated memory first.
     ///
@@ -72,17 +72,17 @@ extern "C" {
     /// mga_destroy(arena);
     /// # }
     /// ```
-    pub fn mga_push_zero(arena: *mut MGArena, size: u64) -> *mut c_void;
+    pub fn mga_push_zero(arena: *const MGArena, size: u64) -> *mut c_void;
 
     /// Frees `size` bytes in the arena.
-    pub fn mga_pop(arena: *mut MGArena, size: u64);
+    pub fn mga_pop(arena: *const MGArena, size: u64);
     /// Frees all bytes after `pos`.
-    pub fn mga_pop_to(arena: *mut MGArena, pos: u64);
+    pub fn mga_pop_to(arena: *const MGArena, pos: u64);
 
-    pub fn mga_reset(arena: *mut MGArena);
+    pub fn mga_reset(arena: *const MGArena);
 
     /// Begins a temporary arena with the given arena.
-    pub fn mga_temp_begin(arena: *mut MGArena) -> MGATemp;
+    pub fn mga_temp_begin(arena: *const MGArena) -> MGATemp;
     /// Ends a temporary arena with the given arena.
     pub fn mga_temp_end(temp: MGATemp);
 }
@@ -100,12 +100,6 @@ pub struct MGArena {
 
     _last_error: MGAError,
     pub error_callback: MGAErrorCallback,
-}
-
-impl MGArena {
-    pub fn size(&self) -> u64 {
-        self._size
-    }
 }
 
 /// An arena descriptor, used to pass information for building the arena. This struct implements
@@ -164,17 +158,17 @@ pub union MGArenaBackend {
 #[repr(C)]
 #[derive(Debug)]
 pub struct MGAMallocBackend {
-    pub cur_node: *mut MGAMallocBackend,
+    pub cur_node: *const MGAMallocBackend,
 }
 
 /// Used by [`MGAMallocArena`].
 #[repr(C)]
 #[derive(Debug)]
 pub struct MGAMallocNode {
-    pub prev: *mut MGAMallocNode,
+    pub prev: *const MGAMallocNode,
     pub size: u64,
     pub pos: u64,
-    pub data: *mut u8,
+    pub data: *const u8,
 }
 
 #[repr(C)]
@@ -223,7 +217,7 @@ pub type MGAErrorCallback = Option<unsafe extern "C" fn(code: MGAErrorCode, msg:
 #[repr(C)]
 #[derive(Debug)]
 pub struct MGATemp {
-    pub arena: *mut MGArena,
+    pub arena: *const MGArena,
     _pos: u64,
 }
 

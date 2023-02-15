@@ -6,7 +6,7 @@ use mga_sys::{
 use std::mem;
 
 pub struct UnsafeArena {
-    inner: *mut MGArena,
+    inner: *const MGArena,
 }
 
 impl UnsafeArena {
