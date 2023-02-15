@@ -1,4 +1,4 @@
-use mga_sys::{mga_create, mga_destroy, mga_push, mga_push_zero, MGADesc, MGArena, mga_reset};
+use mga_sys::{mga_create, mga_destroy, mga_push, mga_push_zero, mga_reset, MGADesc, MGArena};
 use std::mem;
 
 pub struct UnsafeArena {
@@ -7,7 +7,10 @@ pub struct UnsafeArena {
 
 impl UnsafeArena {
     pub fn new(max_size: u64) -> Self {
-        assert!(max_size > 0, "Underlying C implementation will segfault if size is 0.");
+        assert!(
+            max_size > 0,
+            "Underlying C implementation will segfault if size is 0."
+        );
 
         let desc = MGADesc {
             desired_max_size: max_size,
@@ -176,7 +179,7 @@ mod tests {
     fn alloc_tiny_arena() {
         unsafe {
             let mut arena = UnsafeArena::new(1);
-            
+
             let byte = arena.alloc(1_u8);
 
             assert_eq!(*byte, 1);

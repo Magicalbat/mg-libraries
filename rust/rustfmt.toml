@@ -1,0 +1,9 @@
+use_field_init_shorthand = true
+newline_style = "Unix"
+
+# If using nightly Rust
+# unstable_features = true
+# imports_granularity = "Crate"
+# wrap_comments = true
+# comment_width = 100
+# normalize_comments = true

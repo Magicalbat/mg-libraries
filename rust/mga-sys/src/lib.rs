@@ -1,4 +1,7 @@
-use std::{ffi::{c_void, c_char}, mem::ManuallyDrop};
+use std::{
+    ffi::{c_char, c_void},
+    mem::ManuallyDrop,
+};
 
 #[link(name = "mg_arena")]
 extern "C" {
@@ -25,7 +28,8 @@ extern "C" {
 
     pub fn mga_get_error() -> MGAError;
 
-    /// Allocates `size` bytes in the arena, returning a pointer to the beginning of the allocated memory.
+    /// Allocates `size` bytes in the arena, returning a pointer to the beginning of the allocated
+    /// memory.
     ///
     /// # Example
     ///
@@ -97,7 +101,8 @@ impl MGArena {
     }
 }
 
-/// An arena descriptor, used to pass information for building the arena. This struct implements [`Default`], which you can use to fill in default arguments.
+/// An arena descriptor, used to pass information for building the arena. This struct implements
+/// [`Default`], which you can use to fill in default arguments.
 ///
 /// # Example
 ///
@@ -112,10 +117,12 @@ impl MGArena {
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct MGADesc {
-    /// Maximum size of the arena, must be set or else the arena will be unable to allocate anything.
+    /// Maximum size of the arena, must be set or else the arena will be unable to allocate
+    /// anything.
     pub desired_max_size: u64,
 
-    /// The size of each page in the arena. Default is platform specific, but set to 4096 if on an unknown platofmr.
+    /// The size of each page in the arena. Default is platform specific, but set to 4096 if on an
+    /// unknown platofmr.
     pub page_size: u32,
 
     /// The amount of pages per block in the arena, defaults to `min(max_size / page_size, 8)`.
@@ -144,7 +151,8 @@ impl Default for MGADesc {
 ///
 /// # Implementation Note
 ///
-/// I added [`ManuallyDrop`] because it fixed a random error I was getting. I should go back later and try to find a better solution that I actually understand.
+/// I added [`ManuallyDrop`] because it fixed a random error I was getting. I should go back later
+/// and try to find a better solution that I actually understand.
 #[repr(C)]
 pub union MGArenaBackend {
     _malloc_arena: ManuallyDrop<MGAMallocArena>,
