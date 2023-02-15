@@ -23,7 +23,7 @@ First off, if you are not already familiar with memory arenas, I recommend readi
 - [Functions](#functions)
 - [Definitions and Options](#definitions-and-options)
 - [Error Handling](#error-handling)
-- [Other Platforms](#other-platforms)
+- [Platforms](#platforms)
 
 ### Backends
 
@@ -239,7 +239,7 @@ Define these above where you put the implementation. Example:
 - `MGA_THREAD_VAR`
     - Provide the implementation for creating a thread local variable if it is not supported.
 - `MGA_MEM_RESERVE` and related
-    - See [Other Platforms](#other-platforms)
+    - See [Other Platforms](#platforms)
 
 Error Handling
 --------------
@@ -256,7 +256,7 @@ An error has a code (`mga_error_code` enum) and a c string (`char*`) message;
     #include "mg_arena.h"
 
     void error_callback(mga_error error) {
-        printf("MGA Error %d: %s\n", error.code, error.msg);
+        fprintf(stderr, "MGA Error %d: %s\n", error.code, error.msg);
     }
 
     int main() {
@@ -292,7 +292,7 @@ An error has a code (`mga_error_code` enum) and a c string (`char*`) message;
         int* data = (int*)mga_push(arena, MGA_MiB(5));
         if (data == NULL) {
             mga_error error = mga_get_error(arena);
-            printf("MGA Error %d: %s\n", error.code, error.msg);
+            fprintf(stderr, "MGA Error %d: %s\n", error.code, error.msg);
         }
 
         mga_destroy(arena);
@@ -301,11 +301,78 @@ An error has a code (`mga_error_code` enum) and a c string (`char*`) message;
     }
     ```
 
-Other Platforms
----------------
-- TODO
+Platforms
+---------
+Here is a list of the platforms that are currently supported:
+- Windows
+- Linux
+- MacOS
+- Emscripten
+
+Using the low level backend is always prefered by mg_arena, but the malloc backend is used if it is not possible or the platform is unknown. If you are using a platform the is unsupported **and** do not want to use the malloc backend, you can do the following:
+
+(For this example, I will show how you could implement this for Windows, even though you would not actually have to do this for Windows).
+
+To use the low level backend for an unknown platform, you have to create five functions and set corresponding definitions. I would recommend using `<stdint.h>` or something similar for these functions.
+```c
+// Reserves size bytes
+// Returns pointer to data
+void* mem_reserve(uint64_t size);
+// Commits size bytes, starting at ptr
+// Returns 1 if successful, 0 if not
+int32_t mem_commit(void* ptr, uint64_t size);
+// Decommits size bytes, starting at ptr
+void mem_decommit(void* ptr, uint64_t size);
+// Releases size bytes, starting at ptr
+void mem_release(void* ptr, uint64_t size);
+// Gets the page size of the system
+uint32_t mem_pagesize();
+
+#define MGA_MEM_RESERVE mem_reserve
+#define MGA_MEM_COMMIT mem_commit
+#define MGA_MEM_DECOMMIT mem_decommit
+#define MGA_MEM_RELEASE mem_release
+#define MGA_MEM_PAGESIZE mem_pagesize
+
+#define MG_ARENA_IMPL
+#include "mg_arena.h"
+```
+
+Here is what it would look like on Windows:
+```c
+#include <stdint.h>
+#include <Windows.h>
+
+void* win32_mem_reserve(uint64_t size) {
+    return VirtualAlloc(0, size, MEM_RESERVE, PAGE_READWRITE);
+}
+int32_t win32_mem_commit(void* ptr, uint64_t size) {
+    return (int32_t)(VirtualAlloc(ptr, size, MEM_COMMIT, PAGE_READWRITE) != 0);
+}
+void win32_mem_decommit(void* ptr, uint64_t size) {
+    VirtualFree(ptr, size, MEM_DECOMMIT);
+}
+void win32_mem_release(void* ptr, uint64_t size) {
+    // size is unused
+    (void)size;
+    VirtualFree(ptr, 0, MEM_RELEASE);
+}
+uint32_t win32_mem_pagesize() {
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    return (uint32_t)si.dwPageSize;
+}
+
+#define MGA_MEM_RESERVE win32_mem_reserve
+#define MGA_MEM_COMMIT win32_mem_commit
+#define MGA_MEM_DECOMMIT win32_mem_decommit
+#define MGA_MEM_RELEASE win32_mem_release
+#define MGA_MEM_PAGESIZE win32_mem_pagesize
+
+#define MG_ARENA_IMPL
+#include "mg_arena.h"
+```
 
 ### TODO
-- Additional information about using for custom platforms
 - Testing
 - Article about implementation

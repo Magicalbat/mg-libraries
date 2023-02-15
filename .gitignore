@@ -1,4 +1,5 @@
 .ccls-cache
 .replit
-main
+main.*
 replit.nix
+**.bat

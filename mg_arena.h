@@ -1,7 +1,5 @@
 /*
 
-TODO: block size might not be power of two
-TODO: fix malloc backend bug (make linked list instead of fixed array)
 TODO: Scratch arenas
 TODO: static / extern functions
 TODO: dll export functions
