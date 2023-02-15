@@ -65,12 +65,14 @@ typedef enum {
     MGA_ERR_OUT_OF_MEMORY,
     MGA_ERR_CANNOT_POP_MORE
 } mga_error_code;
-typedef void (mga_error_callback)(mga_error_code code, char* msg);
 
 typedef struct {
     mga_error_code code;
     char* msg;
 } mga_error;
+
+typedef void (mga_error_callback)(mga_error error);
+
 
 typedef struct {
     mga_u64 _pos;
@@ -303,9 +305,8 @@ static mga_u32 _mga_round_pow2(mga_u32 v) {
     return v;
 }
 
-static void _mga_empty_error_callback(mga_u32 code, char* msg) {
-    MGA_UNUSED(code);
-    MGA_UNUSED(msg);
+static void _mga_empty_error_callback(mga_error error) {
+    MGA_UNUSED(error);
 }
 
 MGA_THREAD_VAR static mga_error last_error;
@@ -366,7 +367,7 @@ mg_arena* mga_create(const mga_desc* desc) {
     if (out == NULL) {
         last_error.code = MGA_ERR_INIT_FAILED;
         last_error.msg = "Failed to malloc initial memory for arena";
-        init_data.error_callback(last_error.code, last_error.msg);
+        init_data.error_callback(last_error);
         return NULL;
     }
     
@@ -405,7 +406,7 @@ void* mga_push(mg_arena* arena, mga_u64 size) {
         last_error.code = MGA_ERR_OUT_OF_MEMORY;
         last_error.msg = "Arena ran out of memory";
         arena->_last_error = last_error;
-        arena->error_callback(last_error.code, last_error.msg);
+        arena->error_callback(last_error);
         return NULL;
     }
 
@@ -431,7 +432,7 @@ void* mga_push(mg_arena* arena, mga_u64 size) {
             last_error.code = MGA_ERR_MALLOC_FAILED;
             last_error.msg = "Failed to malloc new node";
             arena->_last_error = last_error;
-            arena->error_callback(last_error.code, last_error.msg);
+            arena->error_callback(last_error);
             return NULL;
         }
 
@@ -456,7 +457,7 @@ void mga_pop(mg_arena* arena, mga_u64 size) {
         last_error.code = MGA_ERR_CANNOT_POP_MORE;
         last_error.msg = "Attempted to pop too much memory";
         arena->_last_error = last_error;
-        arena->error_callback(last_error.code, last_error.msg);
+        arena->error_callback(last_error);
     }
     
     mga_u64 size_left = size;
@@ -492,7 +493,7 @@ mg_arena* mga_create(const mga_desc* desc) {
     if (!MGA_MEM_COMMIT(out, init_data.block_size)) {
         last_error.code = MGA_ERR_INIT_FAILED;
         last_error.msg = "Failed to commit initial memory for arena";
-        init_data.error_callback(last_error.code, last_error.msg);
+        init_data.error_callback(last_error);
         return NULL;
     }
 
@@ -515,7 +516,7 @@ void* mga_push(mg_arena* arena, mga_u64 size) {
         last_error.code = MGA_ERR_OUT_OF_MEMORY;
         last_error.msg = "Arena ran out of memory";
         arena->_last_error = last_error;
-        arena->error_callback(last_error.code, last_error.msg);
+        arena->error_callback(last_error);
         return NULL;
     }
 
@@ -533,7 +534,7 @@ void* mga_push(mg_arena* arena, mga_u64 size) {
             last_error.code = MGA_ERR_COMMIT_FAILED;
             last_error.msg = "Failed to commit memory";
             arena->_last_error = last_error;
-            arena->error_callback(last_error.code, last_error.msg);
+            arena->error_callback(last_error);
             return NULL;
         }
 
@@ -548,7 +549,7 @@ void mga_pop(mg_arena* arena, mga_u64 size) {
         last_error.code = MGA_ERR_CANNOT_POP_MORE;
         last_error.msg = "Attempted to pop too much memory";
         arena->_last_error = last_error;
-        arena->error_callback(last_error.code, last_error.msg);
+        arena->error_callback(last_error);
     }
 
     arena->_pos = MGA_MAX(MGA_MIN_POS, arena->_pos - size);

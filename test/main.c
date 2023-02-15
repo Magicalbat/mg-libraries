@@ -6,8 +6,8 @@
 
 // TODO: make actual tests
 
-void err_callback(mga_error_code code, char* msg) {
-    fprintf(stderr, "MGA Error %d: %s\n", code, msg);
+void err_callback(mga_error err) {
+    fprintf(stderr, "MGA Error %d: %s\n", err.code, err.msg);
 }
 
 int main() {
@@ -16,7 +16,7 @@ int main() {
         .desired_block_size = MGA_KiB(128),
         .error_callback = err_callback
     });
-
+    
     printf("%llu\n", mga_get_pos(arena));
     int* nums = MGA_PUSH_ZERO_ARRAY(arena, int, MGA_KiB(64));
     for (int i = 0; i < 64; i++) {

@@ -8,13 +8,32 @@ An [STB-style](https://github.com/nothings/stb/blob/master/docs/stb_howto.txt) l
 - [Sokol Libraries](https://github.com/floooh/sokol)
 - [Metadesk](https://github.com/Dion-Systems/metadesk)
 
-## Quick Start
-
 First off, if you are not already familiar with memory arenas, I recommend reading [this](https://www.rfleury.com/p/untangling-lifetimes-the-arena-allocator) article to know what they are and why they are useful.
 
 **TL;DR**: Arenas are strictly linear allocators that can be faster and easier to work with than the traditional `malloc` and `free` design pattern.
 
-### Tutorial
+## Documentation
+
+
+- [Introduction](#introduction)
+- [Typedefs](#typedefs)
+- [Enums](#enums)
+- [Macros](#macros)
+- [Structs](#structs)
+- [Functions](#functions)
+- [Definitions and Options](#definitions-and-options)
+- [Error Handling](#error-handling)
+- [Other Platforms](#other-platforms)
+
+### Backends
+
+`mg_arena` uses two different backends depending on the requirements of the application. There is a backend that uses `malloc` and `free`, and there is a backend that uses lower level functions like `VirtualAlloc` and `mmap`.**
+
+**NOTE: I recomend using the lower level one, unless you have a good reason not to.**
+
+
+Introduction
+------------
 
 Download the file `mg_arena.h`. Create a source file for the implementation. Add the following:
 ```c
@@ -52,7 +71,7 @@ int* arr = MGA_PUSH_ARRAY(arena, int, 64);
 // Do something with arr, without allocating any more memory
 mga_pop_to(start_pos);
 ```
-**IMPORTANT: Because of memory alignment, `mga_pop` might not deallocate all the memory that you intended it to. It is better to use `mga_pop_to` or temporary arenas (see below).**
+**WARNING: Because of memory alignment, `mga_pop` might not deallocate all the memory that you intended it to. It is better to use `mga_pop_to` or temporary arenas (see below).**
 
 Make temporary arenas:
 ```c
@@ -84,22 +103,6 @@ mg_arena* arena = mga_create(&(mga_desc){
 mga_destroy(arena);
 ```
 
-## Documentation
-
-### Backends
-
-**NOTE: I recomend using the lower level one, unless you have a good reason not to.**
-
-`mg_arena` uses two different backends depending on the requirements of the application. There is a backend that uses `malloc` and `free`, and there is a backend that uses lower level functions like `VirtualAlloc` and `mmap`.**
-
-- [Typedefs](#typedefs)
-- [Enums](#enums)
-- [Macros](#macros)
-- [Structs](#structs)
-- [Functions](#functions)
-- [Definitions and Options](#definitions-and-options)
-- [Custom Backends](#custom-backends)
-- [Error Handling](#error-handling)
 
 Typedefs
 --------
@@ -121,7 +124,7 @@ Typedefs
     - 64 bit unsigned integer
 - `mga_b32`
     - 32 bit boolean
-- `mga_error_callback(mga_error_code code, char* msg)`
+- `mga_error_callback(mga_error error)`
     - Callback function type for errors
 
 Enums
@@ -133,12 +136,12 @@ Enums
         - Arena failed to init
     - MGA_ERR_MALLOC_FAILED
         - Arena failed to allocate memory with malloc
-    - MGA_ERR_OUT_OF_NODES
-        - Malloc based arena ran out of memory
     - MGA_ERR_COMMIT_FAILED
         - Arena failed to commit memory
     - MGA_ERR_OUT_OF_MEMORY
         - Arena position exceeded arena size
+    - MGA_ERR_CANNOT_POP_MORE
+        - Arena cannot deallocate any more memory
 
 Macros
 ------
@@ -209,7 +212,7 @@ Functions
     - **WARNING: Because of memory alignment, this may not always act as expected. Make sure you know what you are doing.**
 - `void mga_reset(mg_arena* arena)`
     - Deallocates all memory in arena, returning the arena to its original position.
-    - Note: Always use `mga_reset` instead of `mga_pop_to` if you need to clear all memory. Position 0 is not always the start of the arena. 
+    - NOTE: Always use `mga_reset` instead of `mga_pop_to` if you need to clear all memory. Position 0 is not always the start of the arena. 
 - `mga_temp mga_temp_begin(mg_arena* arena)`
     - Creates a new temporary arena from the given arena.
 - `void mga_temp_end(mga_temp temp)`
@@ -236,14 +239,70 @@ Define these above where you put the implementation. Example:
 - `MGA_THREAD_VAR`
     - Provide the implementation for creating a thread local variable if it is not supported.
 - `MGA_MEM_RESERVE` and related
-    - See [Custom Backends](#custom-backends)
-
-Custom Backends
----------------
-- TODO
+    - See [Other Platforms](#other-platforms)
 
 Error Handling
 --------------
+There are two ways to do error handling, you can use both or neither. **Error will not be displayed by default.** <br>
+An error has a code (`mga_error_code` enum) and a c string (`char*`) message;
+
+- Callback functions
+    - The first way is to register a callback function. The callback function is unique to the arena, so you can mix and match if you like.
+     ```c
+    #include <stdio.h>
+
+    // In a real application, the implementaion should be in another c file
+    #define MG_ARENA_IMPL
+    #include "mg_arena.h"
+
+    void error_callback(mga_error error) {
+        printf("MGA Error %d: %s\n", error.code, error.msg);
+    }
+
+    int main() {
+        mg_arena* arena = mga_create(&(mga_desc){
+            .desired_max_size = MGA_MiB(4),
+            .error_callback = error_callback
+        });
+
+        mga_push(arena, MGA_MiB(5));
+        // error_callback gets called
+
+        mga_destroy(arena);
+
+        return 0;
+    }
+     ```
+- `mga_error mga_get_error(mg_arena* arena)`
+    - This is another way to get the error struct.
+    - This function does work with a NULL pointer in case the arena is not initialized correctly. If the pointer given to the function is NULL, the function uses a thead local and static variable.
+    - I would recommend using the callback because it will always be assosiated with the arena.
+    ```c
+    #include <stdio.h>
+
+    // In a real application, the implementaion should be in another c file
+    #define MG_ARENA_IMPL
+    #include "mg_arena.h"
+
+    int main() {
+        mg_arena* arena = mga_create(&(mga_desc){
+            .desired_max_size = MGA_MiB(4),
+        });
+
+        int* data = (int*)mga_push(arena, MGA_MiB(5));
+        if (data == NULL) {
+            mga_error error = mga_get_error(arena);
+            printf("MGA Error %d: %s\n", error.code, error.msg);
+        }
+
+        mga_destroy(arena);
+
+        return 0;
+    }
+    ```
+
+Other Platforms
+---------------
 - TODO
 
 ### TODO
