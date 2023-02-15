@@ -89,21 +89,20 @@ typedef struct {
 
 typedef struct {
     mga_u64 desired_max_size;
-    mga_u32 page_size;
     mga_u32 desired_block_size;
     mga_u32 align;
     mga_error_callback* error_callback;
 } mga_desc;
 
+mg_arena* mga_create(const mga_desc* desc);
+void mga_destroy(mg_arena* arena);
+
+mga_error mga_get_error(mg_arena* arena);
+
 mga_u64 mga_get_pos(mg_arena* arena);
 mga_u64 mga_get_size(mg_arena* arena);
 mga_u32 mga_get_block_size(mg_arena* arena);
 mga_u32 mga_get_align(mg_arena* arena);
-
-mga_error mga_get_error(mg_arena* arena);
-
-mg_arena* mga_create(const mga_desc* desc);
-void mga_destroy(mg_arena* arena);
 
 void* mga_push(mg_arena* arena, mga_u64 size);
 void* mga_push_zero(mg_arena* arena, mga_u64 size);
@@ -156,20 +155,22 @@ extern "C" {
 #elif defined(__EMSCRIPTEN__)
 #    define MGA_PLATFORM_EMSCRIPTEN
 #else
+#    warning "MG ARENA: Unknown platform"
 #    define MGA_PLATFORM_UNKNOWN
 #endif
 
-#if defined(MGA_MEM_RESERVE) && defined(MGA_MEM_COMMIT) && defined(MGA_MEM_DECOMMIT) && defined(MGA_MEM_RELEASE)
-#elif !defined(MGA_MEM_RESERVE) && !defined(MGA_MEM_COMMIT) && !defined(MGA_MEM_DECOMMIT) && !defined(MGA_MEM_RELEASE)
+#if defined(MGA_MEM_RESERVE) && defined(MGA_MEM_COMMIT) && defined(MGA_MEM_DECOMMIT) && defined(MGA_MEM_RELEASE) && defined(MGA_MEM_PAGESIZE)
+#elif !defined(MGA_MEM_RESERVE) && !defined(MGA_MEM_COMMIT) && !defined(MGA_MEM_DECOMMIT) && !defined(MGA_MEM_RELEASE) && !defined(MGA_MEM_PAGESIZE)
 #else
-#    error "Must define all or none of, MGA_MEM_RESERVE, MGA_MEM_COMMIT, MGA_MEM_DECOMMIT, and MGA_MEM_RELEASE"
+#    error "MG ARENA: Must define all or none of, MGA_MEM_RESERVE, MGA_MEM_COMMIT, MGA_MEM_DECOMMIT, MGA_MEM_RELEASE, and MGA_MEM_PAGESIZE"
 #endif
 
 #if !defined(MGA_MEM_RESERVE) && !defined(MGA_FORCE_MALLOC) && (defined(MGA_PLATFORM_LINUX) || defined(MGA_PLATFORM_WIN32))
-#   define MGA_MEM_RESERVE _mga_mem_reserve
-#   define MGA_MEM_COMMIT _mga_mem_commit
-#   define MGA_MEM_DECOMMIT _mga_mem_decommit
-#   define MGA_MEM_RELEASE _mga_mem_release
+#    define MGA_MEM_RESERVE _mga_mem_reserve
+#    define MGA_MEM_COMMIT _mga_mem_commit
+#    define MGA_MEM_DECOMMIT _mga_mem_decommit
+#    define MGA_MEM_RELEASE _mga_mem_release
+#    define MGA_MEM_PAGESIZE _mga_mem_pagesize
 #endif
 
 #if !defined(MGA_MEM_RESERVE)
@@ -180,7 +181,7 @@ extern "C" {
 #    if defined(MGA_MALLOC) && defined(MGA_FREE)
 #    elif !defined(MGA_MALLOC) && !defined(MGA_FREE)
 #    else
-#        error "Must define both or none of MGA_MALLOC and MGA_FREE"
+#        error "MGA ARENA: Must define both or none of MGA_MALLOC and MGA_FREE"
 #    endif
 #    ifndef MGA_MALLOC
 #        include <stdlib.h>
@@ -204,7 +205,7 @@ extern "C" {
 #    elif (__STDC_VERSION__ >= 201112L)
 #        define MGA_THREAD_VAR _Thread_local
 #    else
-#        error "Invalid compiler/version for thead variable; Define MGA_THREAD_VAR, use Clang, GCC, or MSVC, or use C11 or greater"
+#        error "MG ARENA: Invalid compiler/version for thead variable; Define MGA_THREAD_VAR, use Clang, GCC, or MSVC, or use C11 or greater"
 #    endif
 #endif
 
@@ -298,7 +299,6 @@ mga_u32 mga_get_align(mg_arena* arena) { return arena->_align; }
 
 typedef struct {
     mga_error_callback* error_callback;
-    mga_u32 page_size;
     mga_u64 max_size;
     mga_u32 block_size;
     mga_u32 align;
@@ -309,19 +309,13 @@ static _mga_init_data _mga_init_common(const mga_desc* desc) {
     
     out.error_callback = desc->error_callback == NULL ?
         _mga_empty_error_callback : desc->error_callback;
+
+    mga_u32 page_size = MGA_MEM_PAGESIZE();
     
-    out.page_size = desc->page_size == 0 ? _mga_mem_pagesize() : desc->page_size;
-    
-    if ((out.page_size & (out.page_size - 1)) != 0) {
-        last_error.code = MGA_ERR_INIT_FAILED;
-        last_error.msg = "Pagesize must be power of two";
-        out.error_callback(last_error.code, last_error.msg);
-    }
-    
-    out.max_size = MGA_ALIGN_UP_POW2(desc->desired_max_size, out.page_size);
+    out.max_size = MGA_ALIGN_UP_POW2(desc->desired_max_size, page_size);
     mga_u32 desired_block_size = desc->desired_block_size == 0 ? 
         MGA_ALIGN_UP_POW2(out.max_size / 8, out.page_size) : desc->desired_block_size;
-    out.block_size = MGA_ALIGN_UP_POW2(desired_block_size, out.page_size);
+    out.block_size = MGA_ALIGN_UP_POW2(desired_block_size, page_size);
     
     out.align = desc->align == 0 ? (sizeof(void*)) : desc->align;
     

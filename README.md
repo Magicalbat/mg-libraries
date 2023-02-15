@@ -12,6 +12,8 @@ An [STB-style](https://github.com/nothings/stb/blob/master/docs/stb_howto.txt) l
 
 First off, if you are not already familiar with memory arenas, I recommend reading [this](https://www.rfleury.com/p/untangling-lifetimes-the-arena-allocator) article to know what they are and why they are useful.
 
+**TL;DR**: Arenas are strictly linear allocators that can be faster and easier to work with than the traditional `malloc` and `free` design pattern.
+
 ### Tutorial
 
 Download the file `mg_arena.h`. Create a source file for the implementation. Add the following:
@@ -84,7 +86,17 @@ mga_destroy(arena);
 
 ## Documentation
 
-**NOTE: `mg_arena` uses two different backends depending on the requirements of the application. There is a backend that uses `malloc` and `free`, and there is a backend that uses lower level functions like `VirtualAlloc` and `mmap`.**
+### Backends
+
+`mg_arena` uses two different backends depending on the requirements of the application. There is a backend that uses `malloc` and `free`, and there is a backend that uses lower level functions like `VirtualAlloc` and `mmap`.**
+
+- [Typedefs](#typedefs)
+- [Enums](#enums)
+- [Macros](#macros)
+- [Structs](#structs)
+- [Functions](#functions)
+- [Definitions and Options](#definitions-and-options)
+- [Custom Backends](#custom-backends)
 
 Typedefs
 --------
@@ -127,23 +139,127 @@ Enums
 
 Macros
 ------
-- MGA_KiB(x)
+- `MGA_KiB(x)`
     - Number of bytes per `x` kibibytes (1024)
-- MGA_MiB(x)
+- `MGA_MiB(x)`
     - Number of bytes per `x` mebibytes (1048576)
-- MGA_GiB(x)
+- `MGA_GiB(x)`
     - Number of bytes per `x` gibibytes (10737418240)
     
-- MGA_PUSH_STRUCT(arena, type)
+- `MGA_PUSH_STRUCT(arena, type)`
     - Pushes a struct `type` onto `arena`
-- MGA_PUSH_ZERO_STRUCT(arena, type)
+- `MGA_PUSH_ZERO_STRUCT(arena, type)`
     - Pushes a struct `type` onto `arena` and zeros the memory
-- MGA_PUSH_ARRAY(arena, type, num)
+- `MGA_PUSH_ARRAY(arena, type, num)`
     - Pushes `num` `type` structs onto `arena`
-- MGA_PUSH_ZERO_ARRAY(arena, type, num)
+- `MGA_PUSH_ZERO_ARRAY(arena, type, num)`
     - Pushes `num` `type` structs onto `arena` and zeros the memory
 
+Structs
+-------
+- `mg_arena` -- A memory arena
+    - `mga_error_callback*` *error_callback*
+        - Error callback function (See `mga_error_callback` for more detail)
+    - *(all other properties should only be accessed through the getter functions below)*
+- `mga_error` -- An error
+    - `mga_error_code` *code*
+        - Error code (see `mga_error_code` for more detail)
+    - `char*` *msg*
+        - Error message as a c string
+- `mga_desc` -- initialization parameters for `mga_create`
+    - This struct should be made with designated initializer. All uninitialized values (except for *desired_max_size*) will be given defaults.
+    - `mga_u64` *desired_max_size*
+        - Maximum size of arena, rounded up to nearest *page_size*
+    - `mga_u32` *desired_block_size*
+        - Size of block in arena, rounded up to nearest *page_size*. For the malloc backend, a node will be a multiple of the block size. For the lower level backend, memory is committed in multiples of the block size. (See [Backends](#backends))
+    - `mga_u32` *align*
+        - Size of memory alignment (See [this article](https://developer.ibm.com/articles/pa-dalign/) for rationality) to apply, **Must be power of 2**. To disable alignment, you can pass in a value of 1.
+    - `mga_error_callback*` *error_callback*
+        - Error callback function (See `mga_error_callback` for more detail)
+- `mga_temp` -- A temporary arena
+    - `mg_arena*` arena
+        - The `mg_arena` object assosiated with the temporary arena
+
+
+Functions
+---------
+- `mga_create` <br>
+    Creates a new `mg_arena` according to the mga_desc object.
+    - Parameter: `const mga_desc* desc`
+    - Returns: `mg_arena*`
+- `mga_destroy` <br>
+    Destroys an `mg_arena` object.
+    - Parameter: `mg_arena* arena`
+- `mga_get_error` <br>
+    Gets the last error from the given arena. If the arena is null, it will give the last error according to a static, thread local variable in the implementation.
+    - Parameter: `mg_arena* arena`
+        - Can be null (see above)
+    - Returns: `mga_error`
+- `mga_get_pos`
+    - Parameter: `mg_arena* arena`
+    - Returns: `mga_u64`
+- `mga_get_size`
+    - Parameter: `mg_arena* arena`
+    - Returns: `mga_u64`
+- `mga_get_block_size`
+    - Parameter: `mg_arena* arena`
+    - Returns: `mga_u32`
+- `mga_get_align`
+    - Parameter: `mg_arena* arena`
+    - Returns: `mga_u32`
+- `mga_push` <br>
+    Allocates new memory on the arena.
+    - Parameter: `mg_arena* arena`
+    - Parameter: `mga_u64 size`
+        - Size in bytes to be allocated
+    - Returns: `void*`
+- `mga_push_zero` <br>
+    Allocates and zeros new memory on the arena.
+    - Parameter: `mg_arena* arena`
+    - Parameter: `mga_u64 size`
+        - Size in bytes to be allocated
+    - Returns: `void*`
+- `mga_pop` <br>
+    Pops memory from the arena. <br>
+    **WARNING: Because of memory alignment, this may not always act as expected. Make sure you know what you are doing.**
+    - Parameter: `mg_arena* arena`
+    - Parameter: `mga_u64 size`
+        - Number of bytes to pop from arena
+- `mga_pop_to` <br>
+    Pops memory from the arena. <br>
+    **WARNING: Because of memory alignment, this may not always act as expected. Make sure you know what you are doing.**
+    - Parameter: `mg_arena* arena`
+    - Parameter: `mga_u64 pos`
+        - New position of arena. All memory from the current to the new position is deallocated.
+- `mga_reset` <br>
+    Deallocates all memory in arena, returning the arena to its original position.
+    - Parameter: `mg_arena* arena`
+- `mga_temp_begin` <br>
+    Creates a new temporary arena (`mga_temp`) from the given arena.
+    - Parameter: `mg_arena* arena`
+    - Returns: `mga_temp`
+- `mga_temp_end` <br>
+    Destroys the temporary arena, deallocating all allocations made with the temporary arena.
+    - Parameter: `mga_temp temp`
+
+
+Definitions and Options
+-----------------------
+- `MGA_FORCE_MALLOC`
+    - Enables the `malloc` based backend
+- `MGA_MALLOC` and `MGA_FREE`
+    - If you are using the malloc backend (because of an unknown platform or `MGA_FORCE_MALLOC`), you can provide your own implementations of `malloc` and `free` to avoid the c standard library.
+- `MGA_MEMSET`
+    - Provide a custom implementation of `memset` to avoid the c standard library.
+- `MGA_THREAD_VAR`
+    - Provide the implementation for creating a thread local variable if it is not supported.
+- `MGA_MEM_RESERVE` and related
+    - See below
+
+Custom Backends
+---------------
+
 ### TODO
-- Documentation
+- Additional information about using for custom platforms
 - Testing
 - Article about implementation
