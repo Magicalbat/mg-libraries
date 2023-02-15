@@ -245,6 +245,16 @@ Functions
 
 Definitions and Options
 -----------------------
+
+Define these above where you put the implementation. Example:
+```c
+#define MGA_FORCE_MALLOC
+#define MGA_MALLOC custom_malloc
+#define MGA_FREE custom_free
+#define MG_ARENA_IMPL
+#include "mg_arena.h"
+```
+
 - `MGA_FORCE_MALLOC`
     - Enables the `malloc` based backend
 - `MGA_MALLOC` and `MGA_FREE`
