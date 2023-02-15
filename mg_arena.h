@@ -1,5 +1,7 @@
 /*
 
+TODO: block size might not be power of two
+TODO: fix malloc backend bug (make linked list instead of fixed array)
 TODO: Scratch arenas
 TODO: static / extern functions
 TODO: dll export functions
@@ -42,15 +44,14 @@ typedef mga_i32 mga_b32;
 #define MGA_GiB(x) (mga_u64)((mga_u64)(x) << 30) 
 
 typedef struct _mga_malloc_node {
+    struct _mga_malloc_node* prev;
     mga_u64 size;
     mga_u64 pos;
     mga_u8* data;
 } _mga_malloc_node;
 
 typedef struct {
-    _mga_malloc_node* node_arr;
-    mga_u32 cur_node;
-    mga_u32 num_nodes;
+    _mga_malloc_node* cur_node;
 } _mga_malloc_backend;
 typedef struct {
     mga_u64 commit_pos;
@@ -150,6 +151,8 @@ extern "C" {
 
 #if defined(__linux__)
 #    define MGA_PLATFORM_LINUX
+#elif defined(__APPLE__)
+#    define MGA_PLATFORM_APPLE
 #elif defined(_WIN32)
 #    define MGA_PLATFORM_WIN32
 #elif defined(__EMSCRIPTEN__)
@@ -246,7 +249,7 @@ mga_u32 _mga_mem_pagesize() {
 
 #endif // MGA_PLATFORM_WIN32
 
-#ifdef MGA_PLATFORM_LINUX
+#if defined(MGA_PLATFORM_LINUX) || defined(MGA_PLATFORM_APPLE)
 
 #include <sys/mman.h>
 #include <unistd.h>
@@ -270,7 +273,7 @@ mga_u32 _mga_mem_pagesize() {
     return (mga_u32)sysconf(_SC_PAGESIZE);
 }
 
-#endif // MGA_PLATFORM_LINUX
+#endif // MGA_PLATFORM_LINUX || MGA_PLATFORM_APPLE
 
 #ifdef MGA_PLATFORM_UNKNOWN
 
@@ -314,7 +317,7 @@ static _mga_init_data _mga_init_common(const mga_desc* desc) {
     
     out.max_size = MGA_ALIGN_UP_POW2(desc->desired_max_size, page_size);
     mga_u32 desired_block_size = desc->desired_block_size == 0 ? 
-        MGA_ALIGN_UP_POW2(out.max_size / 8, out.page_size) : desc->desired_block_size;
+        MGA_ALIGN_UP_POW2(out.max_size / 8, page_size) : desc->desired_block_size;
     out.block_size = MGA_ALIGN_UP_POW2(desired_block_size, page_size);
     
     out.align = desc->align == 0 ? (sizeof(void*)) : desc->align;
@@ -323,10 +326,10 @@ static _mga_init_data _mga_init_common(const mga_desc* desc) {
 }
 
 void* mga_push_zero(mg_arena* arena, mga_u64 size) {
-    void* out = mga_push(arena, size);
+    mga_u8* out = mga_push(arena, size);
     MGA_MEMSET(out, 0, size);
     
-    return out;
+    return (void*)out;
 }
 
 void mga_pop_to(mg_arena* arena, mga_u64 pos) {
@@ -351,31 +354,26 @@ mg_arena* mga_create(const mga_desc* desc) {
     out->_size = init_data.max_size;
     out->_block_size = init_data.block_size;
     out->_align = init_data.align;
+    out->_last_error = (mga_error){ .code=MGA_ERR_NONE, .mgs="" };
     out->error_callback = init_data.error_callback;
-    
-    mga_u32 num_nodes = (init_data.max_size / init_data.block_size) + 1;
-    mga_u64 arr_size = sizeof(_mga_malloc_node) * num_nodes;
 
-    out->_malloc_backend = (_mga_malloc_backend){
-        .node_arr = (_mga_malloc_node*)malloc(arr_size),
-        .num_nodes = num_nodes,
-        .cur_node = 0
+    out->_malloc_backend.cur_node = (_mga_malloc_node*)malloc(sizeof(_mga_malloc_node));
+    *out->_malloc_backend.cur_node = (_mga_malloc_node){
+        .prev = NULL,
+        .size = out->_block_size,
+        .pos = 0,
+        .data = (mga_u8*)malloc(out->_block_size)
     };
-    MGA_MEMSET(out->_malloc_backend.node_arr, 0, arr_size);
 
-    _mga_malloc_node* node = &out->_malloc_backend.node_arr[0];
+    _mga_malloc_node* node = &out->_malloc_backend.cur_node;
     node->size = out->_block_size;
     node->data = (mga_u8*)malloc(node->size);
 
     return out;
 }
 void mga_destroy(mg_arena* arena) {
-    for (mga_u32 i = 0; i < arena->_malloc_backend.num_nodes; i++) {
-        if (arena->_malloc_backend.node_arr[i].size != 0) {
-            free(arena->_malloc_backend.node_arr[i].data);
-        }
-    }
-
+    // TODO: free nodes
+    
     free(arena->_malloc_backend.node_arr);
     free(arena);
 }
@@ -485,6 +483,7 @@ mg_arena* mga_create(const mga_desc* desc) {
     out->_block_size = init_data.block_size;
     out->_align = init_data.align;
     out->_reserve_backend.commit_pos = init_data.block_size;
+    out->_last_error = (mga_error){ .code=MGA_ERR_NONE, .msg="" };
     out->error_callback = init_data.error_callback;
 
     return out;
@@ -504,14 +503,14 @@ void* mga_push(mg_arena* arena, mga_u64 size) {
 
     mga_u64 pos_aligned = MGA_ALIGN_UP_POW2(arena->_pos, arena->_align);
     void* out = (void*)((mga_u8*)arena + pos_aligned);
-    arena->_pos += size;
+    arena->_pos = pos_aligned + size;
 
     mga_u64 commit_pos = arena->_reserve_backend.commit_pos;
     if (arena->_pos > commit_pos) {
-        mga_u64 commit_unclamped = MGA_ALIGN_UP_POW2(pos_aligned, arena->_block_size);
+        mga_u64 commit_unclamped = MGA_ALIGN_UP_POW2(arena->_pos, arena->_block_size);
         mga_u64 new_commit_pos = MGA_MIN(commit_unclamped, arena->_size);
         mga_u64 commit_size = new_commit_pos - commit_pos;
-
+        
         if (!MGA_MEM_COMMIT((void*)((mga_u8*)arena + commit_pos), commit_size)) {
             last_error.code = MGA_ERR_COMMIT_FAILED;
             last_error.msg = "Failed to commit memory";

@@ -88,9 +88,13 @@ mga_destroy(arena);
 
 ### Backends
 
+<<<<<<< Updated upstream
 `mg_arena` uses two different backends depending on the requirements of the application. There is a backend that uses `malloc` and `free`, and there is a backend that uses lower level functions like `VirtualAlloc` and `mmap`. 
 
 **NOTE: I recomend using the lower level one, unless you have a good reason not to.**
+=======
+`mg_arena` uses two different backends depending on the requirements of the application. There is a backend that uses `malloc` and `free`, and there is a backend that uses lower level functions like `VirtualAlloc` and `mmap`.**
+>>>>>>> Stashed changes
 
 - [Typedefs](#typedefs)
 - [Enums](#enums)
