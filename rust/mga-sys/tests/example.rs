@@ -1,14 +1,9 @@
 use mga_sys::*;
-use std::{
-    ffi::{c_char, CStr},
-    mem,
-};
+use std::mem;
 
 // A callback function that prints the error to stderr
-unsafe extern "C" fn err_callback(code: MGAErrorCode, msg: *const c_char) {
-    // Convert to CStr, so we can print out the message
-    let msg = unsafe { CStr::from_ptr(msg) };
-    eprintln!("MGA Error {:?}: {}", code, msg.to_string_lossy());
+unsafe extern "C" fn err_callback(error: MGAError) {
+    eprintln!("MGA Error {:?}: {}", error.code, error.msg_to_string());
 }
 
 // An example struct to test allocation

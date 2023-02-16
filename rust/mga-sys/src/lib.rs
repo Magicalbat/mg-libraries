@@ -276,23 +276,21 @@ pub enum MGAErrorCode {
     /// The arena failed to allocate memory with `malloc`.
     MallocFailed,
 
-    /// The `malloc`-based arena ran out of memory.
-    OutOfNodes,
-
     /// The arena failed to commit memory.
     CommitFailed,
 
     /// The arena position exceeded arena size.
     OutOfMemory,
+
+    /// The arena cannot deallocate any more memory.
+    CannotPopMore,
 }
 
 /// A callback function that is called when an error occurs in an arena.
 ///
 /// If this is set to `None` (e.g. the function pointer is null), no error function will be called.
-///
-/// See [`MGAError`] for function argument documentation. You can also get the error through
 /// [`mga_get_error`].
-pub type MGAErrorCallback = Option<unsafe extern "C" fn(code: MGAErrorCode, msg: *const c_char)>;
+pub type MGAErrorCallback = Option<unsafe extern "C" fn(error: MGAError)>;
 
 /// A temporary arena, see [`mga_temp_begin`].
 #[repr(C)]
