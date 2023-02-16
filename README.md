@@ -27,7 +27,7 @@ First off, if you are not already familiar with memory arenas, I recommend readi
 
 ### Backends
 
-`mg_arena` uses two different backends depending on the requirements of the application. There is a backend that uses `malloc` and `free`, and there is a backend that uses lower level functions like `VirtualAlloc` and `mmap`.**
+`mg_arena` uses two different backends depending on the requirements of the application. There is a backend that uses `malloc` and `free`, and there is a backend that uses lower level functions like `VirtualAlloc` and `mmap`.
 
 **NOTE: I recomend using the lower level one, unless you have a good reason not to.**
 
@@ -146,11 +146,11 @@ Enums
 Macros
 ------
 - `MGA_KiB(x)`
-    - Number of bytes per `x` kibibytes (1024)
+    - Number of bytes per `x` kibibytes (1,024)
 - `MGA_MiB(x)`
-    - Number of bytes per `x` mebibytes (1048576)
+    - Number of bytes per `x` mebibytes (1,048,576)
 - `MGA_GiB(x)`
-    - Number of bytes per `x` gibibytes (10737418240)
+    - Number of bytes per `x` gibibytes (1,073,741,824)
     
 - `MGA_PUSH_STRUCT(arena, type)`
     - Pushes a struct `type` onto `arena`
@@ -191,6 +191,7 @@ Functions
 ---------
 - `mg_arena* mga_create(const mga_desc* desc)` <br>
     - Creates a new `mg_arena` according to the mga_desc object.
+    - Returns NULL on failure, get the error with the callback function or with `mga_get_error`
 - `void mga_destroy(mg_arena* arena)` <br>
     - Destroys an `mg_arena` object.
 - `mga_error mga_get_error(mg_arena* arena)` <br>
@@ -202,14 +203,18 @@ Functions
     - (See `mga_desc` for more detail about what these mean)
 - `void* mga_push(mg_arena* arena, mga_u64 size)`
     - Allocates `size` bytes on the arena.
+    - Retruns NULL on failure
 - `void* mga_push_zero(mg_arena* arena, mga_u64 size)`
     - Allocates `size` bytes on the arena and zeros the memory.
+    - Returns NULL on failure
 - `void mga_pop(mg_arena* arena, mga_u64 size)`
     - Pops `size` bytes from the arena.
     - **WARNING: Because of memory alignment, this may not always act as expected. Make sure you know what you are doing.**
+    - Fails if you attempt to pop too much memory
 - `void mga_pop_to(mg_arena* arena, mga_u64 pos)`
     - Pops memory from the arena, setting the arenas position to `pos`.
     - **WARNING: Because of memory alignment, this may not always act as expected. Make sure you know what you are doing.**
+    - Fails if you attempt to pop too much memory
 - `void mga_reset(mg_arena* arena)`
     - Deallocates all memory in arena, returning the arena to its original position.
     - NOTE: Always use `mga_reset` instead of `mga_pop_to` if you need to clear all memory. Position 0 is not always the start of the arena. 
@@ -239,11 +244,11 @@ Define these above where you put the implementation. Example:
 - `MGA_THREAD_VAR`
     - Provide the implementation for creating a thread local variable if it is not supported.
 - `MGA_MEM_RESERVE` and related
-    - See [Other Platforms](#platforms)
+    - See [Platforms](#platforms)
 
 Error Handling
 --------------
-There are two ways to do error handling, you can use both or neither. **Error will not be displayed by default.** <br>
+There are two ways to do error handling, you can use both or neither. **Errors will not be displayed by default.** <br>
 An error has a code (`mga_error_code` enum) and a c string (`char*`) message;
 
 - Callback functions
@@ -319,7 +324,7 @@ To use the low level backend for an unknown platform, you have to create five fu
 // Returns pointer to data
 void* mem_reserve(uint64_t size);
 // Commits size bytes, starting at ptr
-// Returns 1 if successful, 0 if not
+// Returns 1 if the commit worked, 0 on failure
 int32_t mem_commit(void* ptr, uint64_t size);
 // Decommits size bytes, starting at ptr
 void mem_decommit(void* ptr, uint64_t size);
