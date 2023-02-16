@@ -1,7 +1,8 @@
 .ccls-cache
 .replit
-main
+main.*
 replit.nix
+**.bat
 
 # Apple stop leaking into my Git repos
 .DS_Store
