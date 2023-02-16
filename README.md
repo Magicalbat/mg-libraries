@@ -14,7 +14,7 @@ First off, if you are not already familiar with memory arenas, I recommend readi
 
 ## Documentation
 
-
+- [Example](#example)
 - [Introduction](#introduction)
 - [Typedefs](#typedefs)
 - [Enums](#enums)
@@ -25,12 +25,49 @@ First off, if you are not already familiar with memory arenas, I recommend readi
 - [Error Handling](#error-handling)
 - [Platforms](#platforms)
 
-### Backends
+Backends
+--------
 
 `mg_arena` uses two different backends depending on the requirements of the application. There is a backend that uses `malloc` and `free`, and there is a backend that uses lower level functions like `VirtualAlloc` and `mmap`.
 
 **NOTE: I recomend using the lower level one, unless you have a good reason not to.**
 
+Example
+-------
+```c
+#include <stdio.h>
+
+// You should put the implementation in a separate source file in a real project
+#define MG_ARENA_IMPL
+#include "mg_arena.h"
+
+void arena_error(mga_error err) {
+    fprintf(stderr, "MGA Error %d: %s\n", err.code, err.msg);
+}
+
+int main() {
+    mg_arena* arena = mga_create(&(mga_desc){
+        .desired_max_size = MGA_MiB(4),
+        .desired_block_size = MGA_KiB(256),
+        .error_callback = arena_error
+    });
+
+    int* data = (int*)mga_push(arena, sizeof(int) * 64);
+    for (int i = 0; i < 64; i++) {
+        data[i] = i;
+    }
+
+    printf("[ ");
+    for (int i = 0; i < 64; i++) {
+        printf("%d, ", data[i]);
+    }
+    printf("\b\b ]\n");
+
+    mga_destroy(arena);
+
+    return 0;
+}
+```
 
 Introduction
 ------------
