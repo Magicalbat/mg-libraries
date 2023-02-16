@@ -8,6 +8,11 @@ mga-sys = { path = "mga-sys", version = "0.0.0" }
 
 [features]
 default = ["export-sys"]
+
+# Use malloc backend
+malloc = ["mga-sys/malloc"]
+
+# Re-export the mga-sys crate
 export-sys = []
 
 [workspace]
