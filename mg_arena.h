@@ -181,7 +181,7 @@ extern "C" {
 #    define MGA_MEM_PAGESIZE _mga_mem_pagesize
 #endif
 
-#if !defined(MGA_MEM_RESERVE)
+#if !defined(MGA_MEM_RESERVE) && !defined(MGA_FORCE_MALLOC)
 #   define MGA_FORCE_MALLOC
 #endif
 
