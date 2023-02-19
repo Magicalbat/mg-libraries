@@ -278,17 +278,16 @@ Functions
     - Gets a thread local scratch arena
     - You can pass in a list of conflict scratch arenas. One example where this is useful is if you have a function that gets a scratch arena calling another function that gets another scratch arena:
         - ```c
-            int* func_b(mg_arena* arena) {
-                mga_temp scratch = mga_scratch_get(&arena, 1);
-                // Do stuff
-                mga_scratch_release(scratch);
-            }
-            void func_a() {
-                mga_temp scratch = mga_scratch_get(NULL, 0);
-                func_b(scratch);
-                mga_scratch_release(scratch);
-            }
-        ```
+          int* func_b(mg_arena* arena) {
+              mga_temp scratch = mga_scratch_get(&arena, 1);
+              // Do stuff
+              mga_scratch_release(scratch);
+          }
+          void func_a() {
+              mga_temp scratch = mga_scratch_get(NULL, 0);
+              func_b(scratch);
+              mga_scratch_release(scratch);
+          }
 - `void mga_scratch_release(mga_temp scratch)`
     - Releases the scratch arena
 
