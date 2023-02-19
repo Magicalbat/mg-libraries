@@ -181,7 +181,7 @@ extern "C" {
 #    define MGA_MEM_PAGESIZE _mga_mem_pagesize
 #endif
 
-#if !defined(MGA_MEM_RESERVE)
+#if !defined(MGA_MEM_RESERVE) && !defined(MGA_FORCE_MALLOC)
 #   define MGA_FORCE_MALLOC
 #endif
 
@@ -309,7 +309,12 @@ static void _mga_empty_error_callback(mga_error error) {
 
 MGA_THREAD_VAR static mga_error last_error;
 mga_error mga_get_error(mg_arena* arena) {
-    return arena == NULL ? last_error : arena->_last_error;
+    mga_error* err = arena == NULL ? &last_error : &arena->_last_error;
+    mga_error* temp = err;
+
+    *err = (mga_error){ MGA_ERR_NONE, "" };
+    
+    return *temp;
 }
 
 mga_u64 mga_get_pos(mg_arena* arena) { return arena->_pos; }
