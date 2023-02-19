@@ -8,6 +8,8 @@ An [STB-style](https://github.com/nothings/stb/blob/master/docs/stb_howto.txt) l
 - [Sokol Libraries](https://github.com/floooh/sokol)
 - [Metadesk](https://github.com/Dion-Systems/metadesk)
 
+**Many parts of the implementation are based on the implementation found in Metadesk**
+
 First off, if you are not already familiar with memory arenas, I recommend reading [this](https://www.rfleury.com/p/untangling-lifetimes-the-arena-allocator) article to know what they are and why they are useful.
 
 **TL;DR**: Arenas are strictly linear allocators that can be faster and easier to work with than the traditional `malloc` and `free` design pattern.
@@ -118,6 +120,15 @@ int* data = (int*)mga_push(temp.arena, sizeof(int) * 16);
 
 mga_temp_end(temp);
 // data gets deallocated
+```
+
+Get temporary memory with scratch arenas:
+```c
+mga_temp scratch = mga_scratch_get(NULL, 0);
+
+int* data = (int*)mga_push(scratch.arena, sizeof(int) * 64);
+
+mga_scratch_release(scratch);
 ```
 
 Reset/clear arenas with `mga_reset`:
@@ -259,6 +270,27 @@ Functions
     - Creates a new temporary arena from the given arena.
 - `void mga_temp_end(mga_temp temp)`
     - Destroys the temporary arena, deallocating all allocations made with the temporary arena.
+- `void mga_scratch_set_desc(mga_desc* desc)`
+    - Sets the `mga_desc` used to initialize scratch arenas.
+    - NOTE: This will only work before any calls to `mga_scratch_get`
+    - The default desc has a `desired_max_size` of 64 MiB and a `desired_block_size` of 128 KiB
+- `mga_temp mga_scratch_get(mg_arena** conflicts, mga_u32 num_conflicts)`
+    - Gets a thread local scratch arena
+    - You can pass in a list of conflict scratch arenas. One example where this is useful is if you have a function that gets a scratch arena calling another function that gets another scratch arena:
+        - ```c
+            int* func_b(mg_arena* arena) {
+                mga_temp scratch = mga_scratch_get(&arena, 1);
+                // Do stuff
+                mga_scratch_release(scratch);
+            }
+            void func_a() {
+                mga_temp scratch = mga_scratch_get(NULL, 0);
+                func_b(scratch);
+                mga_scratch_release(scratch);
+            }
+        ```
+- `void mga_scratch_release(mga_temp scratch)`
+    - Releases the scratch arena
 
 Definitions and Options
 -----------------------
@@ -287,6 +319,9 @@ Define these above where you put the implementation. Example:
 - `MGA_DLL`
     - Adds `__declspec(dllexport)` or `__declspec(dllimport)` to all functions.
     - NOTE: `MGA_STATIC` and `MGA_DLL` do not work simultaneously and they do not work if you have defined `MGA_FNC_DEF`.
+- `MGA_SCRATCH_COUNT`
+    - Number of scratch arenas per thread
+    - Default is 2
 - `MGA_MEM_RESERVE` and related
     - See [Platforms](#platforms)
 

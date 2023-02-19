@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#define MGA_STATIC
 #define MG_ARENA_IMPL
 #include "../mg_arena.h"
 
@@ -149,13 +150,13 @@ static test_func* test_funcs[TEST_COUNT] = {
 #define GRN_BG(s) "\x1b[42m" s "\x1b[0m"
 
 int main(int argc, char** argv) {
-    uint32_t num_passed = 0;
     bool quiet = false;
     for (int i = 0; i < argc; i++) {
         if (strcmp(argv[i], "-s") == 0)
             quiet = true;
     }
 
+    uint32_t num_passed = 0;
     for (int i = 0; i < TEST_COUNT; i++) {
         if (test_funcs[i]()) {
             if (!quiet)

@@ -136,6 +136,10 @@ typedef struct {
 MGA_FUNC_DEF mga_temp mga_temp_begin(mg_arena* arena);
 MGA_FUNC_DEF void mga_temp_end(mga_temp temp);
 
+MGA_FUNC_DEF void mga_scratch_set_desc(mga_desc* desc);
+MGA_FUNC_DEF mga_temp mga_scratch_get(mg_arena** conflicts, mga_u32 num_conflicts);
+MGA_FUNC_DEF void mga_scratch_release(mga_temp scratch);
+
 #ifdef __cplusplus
 }
 #endif
@@ -214,6 +218,9 @@ extern "C" {
 #endif
 
 #define MGA_UNUSED(x) (void)(x)
+
+#define MGA_TRUE 1
+#define MGA_FALSE 0
 
 #ifndef MGA_THREAD_VAR
 #    if defined(__clang__) || defined(__GNUC__)
@@ -631,6 +638,51 @@ MGA_FUNC_DEF mga_temp mga_temp_begin(mg_arena* arena) {
 }
 MGA_FUNC_DEF void mga_temp_end(mga_temp temp) {
     mga_pop_to(temp.arena, temp._pos);
+}
+
+#ifndef MGA_SCRATCH_COUNT
+#   define MGA_SCRATCH_COUNT 2
+#endif
+
+MGA_THREAD_VAR static mga_desc _mga_scratch_desc = {
+    .desired_max_size = MGA_MiB(64),
+    .desired_block_size = MGA_KiB(128)
+};
+MGA_THREAD_VAR static mg_arena* _mga_scratch_arenas[MGA_SCRATCH_COUNT] = { 0 };
+
+MGA_FUNC_DEF void mga_scratch_set_desc(mga_desc* desc) {
+    if (_mga_scratch_arenas[0] == NULL)
+        _mga_scratch_desc = *desc;
+}
+MGA_FUNC_DEF mga_temp mga_scratch_get(mg_arena** conflicts, mga_u32 num_conflicts) {
+    if (_mga_scratch_arenas[0] == NULL) {
+        for (mga_u32 i = 0; i < MGA_SCRATCH_COUNT; i++) {
+            _mga_scratch_arenas[i] = mga_create(&_mga_scratch_desc);
+        }
+    }
+
+    mga_temp out = { 0 };
+
+
+    for (mga_u32 i = 0; i < MGA_SCRATCH_COUNT; i++) {
+        mg_arena* arena = _mga_scratch_arenas[i];
+
+        mga_b32 in_conflict = MGA_FALSE;
+        for (mga_u32 j = 0; j < num_conflicts; j++) {
+            if (arena == conflicts[j]) {
+                in_conflict = MGA_TRUE;
+                break;
+            }
+        }
+        if (in_conflict) { continue; }
+
+        out = mga_temp_begin(arena);
+    }
+
+    return out;
+}
+MGA_FUNC_DEF void mga_scratch_release(mga_temp scratch) {
+    mga_temp_end(scratch);
 }
 
 #ifdef __cplusplus
