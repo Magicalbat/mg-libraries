@@ -280,6 +280,13 @@ Define these above where you put the implementation. Example:
     - Provide a custom implementation of `memset` to avoid the c standard library.
 - `MGA_THREAD_VAR`
     - Provide the implementation for creating a thread local variable if it is not supported.
+- `MGA_FUNC_DEF`
+    - Add custom prefix to all functions
+- `MGA_STATIC`
+    - Makes all functions static.
+- `MGA_DLL`
+    - Adds `__declspec(dllexport)` or `__declspec(dllimport)` to all functions.
+    - NOTE: `MGA_STATIC` and `MGA_DLL` do not work simultaneously and they do not work if you have defined `MGA_FNC_DEF`.
 - `MGA_MEM_RESERVE` and related
     - See [Platforms](#platforms)
 
