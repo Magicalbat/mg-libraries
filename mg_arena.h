@@ -567,6 +567,8 @@ MGA_FUNC_DEF void mga_pop(mg_arena* arena, mga_u64 size) {
         last_error.msg = "Attempted to pop too much memory";
         arena->_last_error = last_error;
         arena->error_callback(last_error);
+
+        return;
     }
 
     arena->_pos = MGA_MAX(MGA_MIN_POS, arena->_pos - size);
