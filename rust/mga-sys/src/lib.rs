@@ -309,6 +309,100 @@ pub struct MGATemp {
     _pos: u64,
 }
 
+/// Pushes a struct of type `$ty` onto a give `$arena` of type `*const MGArena`.
+///
+/// ```
+/// # use mga_sys::*;
+/// # unsafe {
+/// let arena = mga_create(&MGADesc::default() as *const MGADesc);
+///
+/// #[derive(Debug, PartialEq)]
+/// struct Foo {
+///     x: u32,
+///     y: f32,
+/// }
+///
+/// let data = mga_push_struct!(arena, Foo);
+///
+/// *data = Foo { x: 3, y: 0.0 };
+///
+/// assert_eq!(*data, Foo { x: 3, y: 0.0 });
+/// # }
+/// ```
+#[macro_export]
+macro_rules! mga_push_struct {
+    ($arena:expr, $ty:ty) => {
+        mga_push($arena, ::std::mem::size_of::<$ty>() as u64) as *mut $ty
+    };
+}
+
+/// Pushes a zeroed struct of type `$ty` onto a give `$arena` of type `*const MGArena`.
+///
+/// ```
+/// # use mga_sys::*;
+/// # unsafe {
+/// let arena = mga_create(&MGADesc::default() as *const MGADesc);
+///
+/// #[derive(Debug, PartialEq)]
+/// struct Foo {
+///     x: u32,
+///     y: f32,
+/// }
+///
+/// let data = mga_push_zero_struct!(arena, Foo);
+///
+/// assert_eq!(*data, Foo { x: 0, y: 0.0 });
+/// # }
+/// ```
+#[macro_export]
+macro_rules! mga_push_zero_struct {
+    ($arena:expr, $ty:ty) => {
+        mga_push_zero($arena, ::std::mem::size_of::<$ty>() as u64) as *mut $ty
+    };
+}
+
+/// Pushes an array of type `$ty` with `$num` elements onto a give `$arena` of type `*const
+/// MGArena`.
+///
+/// ```
+/// # use mga_sys::*;
+/// # unsafe {
+/// let arena = mga_create(&MGADesc::default() as *const MGADesc);
+///
+/// let data = mga_push_array!(arena, u8, 5);
+///
+/// *data = [1, 2, 3, 4, 5];
+///
+/// assert_eq!(*data, [1, 2, 3, 4, 5]);
+/// # }
+/// ```
+#[macro_export]
+macro_rules! mga_push_array {
+    ($arena:expr, $ty:ty, $num:expr) => {
+        mga_push($arena, ::std::mem::size_of::<[$ty; $num]>() as u64) as *mut [$ty; $num]
+    };
+}
+
+/// Pushes a zeroed array of type `$ty` with `$num` elements onto a give `$arena` of type `*const
+/// MGArena`.
+///
+/// ```
+/// # use mga_sys::*;
+/// # unsafe {
+/// let arena = mga_create(&MGADesc::default() as *const MGADesc);
+///
+/// let data = mga_push_zero_array!(arena, u32, 3);
+///
+/// assert_eq!(*data, [0_u32; 3]);
+/// # }
+/// ```
+#[macro_export]
+macro_rules! mga_push_zero_array {
+    ($arena:expr, $ty:ty, $num:expr) => {
+        mga_push_zero($arena, ::std::mem::size_of::<[$ty; $num]>() as u64) as *mut [$ty; $num]
+    };
+}
+
 /// Returns number of bytes for given KiB (1,024 bytes).
 pub const fn mga_kib(x: u64) -> u64 {
     x << 10
