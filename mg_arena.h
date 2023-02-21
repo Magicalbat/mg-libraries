@@ -1,12 +1,4 @@
 /*
-
-TODO: Scratch arenas
-TODO: static / extern functions
-TODO: dll export functions
-
-*/
-
-/*
 MGA Header
 ===================================================
   __  __  ___   _     _  _ ___   _   ___  ___ ___ 
@@ -19,6 +11,18 @@ MGA Header
 
 #ifndef MG_ARENA_H
 #define MG_ARENA_H
+
+#ifndef MGA_FUNC_DEF
+#   if defined(MGA_STATIC)
+#      define MGA_FUNC_DEF static
+#   elif defined(_WIN32) && defined(MGA_DLL) && defined(MG_ARENA_IMPL)
+#       define MGA_FUNC_DEF __declspec(dllexport)
+#   elif defined(_WIN32) && defined(MGA_DLL)
+#       define MGA_FUNC_DEF __declspec(dllimport)
+#   else
+#      define MGA_FUNC_DEF extern
+#   endif
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -95,23 +99,23 @@ typedef struct {
     mga_error_callback* error_callback;
 } mga_desc;
 
-mg_arena* mga_create(const mga_desc* desc);
-void mga_destroy(mg_arena* arena);
+MGA_FUNC_DEF mg_arena* mga_create(const mga_desc* desc);
+MGA_FUNC_DEF void mga_destroy(mg_arena* arena);
 
-mga_error mga_get_error(mg_arena* arena);
+MGA_FUNC_DEF mga_error mga_get_error(mg_arena* arena);
 
-mga_u64 mga_get_pos(mg_arena* arena);
-mga_u64 mga_get_size(mg_arena* arena);
-mga_u32 mga_get_block_size(mg_arena* arena);
-mga_u32 mga_get_align(mg_arena* arena);
+MGA_FUNC_DEF mga_u64 mga_get_pos(mg_arena* arena);
+MGA_FUNC_DEF mga_u64 mga_get_size(mg_arena* arena);
+MGA_FUNC_DEF mga_u32 mga_get_block_size(mg_arena* arena);
+MGA_FUNC_DEF mga_u32 mga_get_align(mg_arena* arena);
 
-void* mga_push(mg_arena* arena, mga_u64 size);
-void* mga_push_zero(mg_arena* arena, mga_u64 size);
+MGA_FUNC_DEF void* mga_push(mg_arena* arena, mga_u64 size);
+MGA_FUNC_DEF void* mga_push_zero(mg_arena* arena, mga_u64 size);
 
-void mga_pop(mg_arena* arena, mga_u64 size);
-void mga_pop_to(mg_arena* arena, mga_u64 pos);
+MGA_FUNC_DEF void mga_pop(mg_arena* arena, mga_u64 size);
+MGA_FUNC_DEF void mga_pop_to(mg_arena* arena, mga_u64 pos);
 
-void mga_reset(mg_arena* arena);
+MGA_FUNC_DEF void mga_reset(mg_arena* arena);
 
 #define MGA_PUSH_STRUCT(arena, type) (type*)mga_push(arena, sizeof(type))
 #define MGA_PUSH_ZERO_STRUCT(arena, type) (type*)mga_push_zero(arena, sizeof(type))
@@ -123,8 +127,12 @@ typedef struct {
     mga_u64 _pos;
 } mga_temp;
 
-mga_temp mga_temp_begin(mg_arena* arena);
-void mga_temp_end(mga_temp temp);
+MGA_FUNC_DEF mga_temp mga_temp_begin(mg_arena* arena);
+MGA_FUNC_DEF void mga_temp_end(mga_temp temp);
+
+MGA_FUNC_DEF void mga_scratch_set_desc(mga_desc* desc);
+MGA_FUNC_DEF mga_temp mga_scratch_get(mg_arena** conflicts, mga_u32 num_conflicts);
+MGA_FUNC_DEF void mga_scratch_release(mga_temp scratch);
 
 #ifdef __cplusplus
 }
@@ -205,6 +213,9 @@ extern "C" {
 
 #define MGA_UNUSED(x) (void)(x)
 
+#define MGA_TRUE 1
+#define MGA_FALSE 0
+
 #ifndef MGA_THREAD_VAR
 #    if defined(__clang__) || defined(__GNUC__)
 #        define MGA_THREAD_VAR __thread
@@ -231,22 +242,22 @@ extern "C" {
 
 #include <Windows.h>
 
-void* _mga_mem_reserve(mga_u64 size) {
+static void* _mga_mem_reserve(mga_u64 size) {
     void* out = VirtualAlloc(0, size, MEM_RESERVE, PAGE_READWRITE);
     return out;
 }
-mga_b32 _mga_mem_commit(void* ptr, mga_u64 size) {
+static mga_b32 _mga_mem_commit(void* ptr, mga_u64 size) {
     mga_b32 out = (VirtualAlloc(ptr, size, MEM_COMMIT, PAGE_READWRITE) != 0);
     return out;
 }
-void _mga_mem_decommit(void* ptr, mga_u64 size) {
+static void _mga_mem_decommit(void* ptr, mga_u64 size) {
     VirtualFree(ptr, size, MEM_DECOMMIT);
 }
-void _mga_mem_release(void* ptr, mga_u64 size) {
+static void _mga_mem_release(void* ptr, mga_u64 size) {
     MGA_UNUSED(size);
     VirtualFree(ptr, 0, MEM_RELEASE);
 }
-mga_u32 _mga_mem_pagesize() {
+static mga_u32 _mga_mem_pagesize() {
     SYSTEM_INFO si;
     GetSystemInfo(&si);
     return (mga_u32)si.dwPageSize;
@@ -259,22 +270,22 @@ mga_u32 _mga_mem_pagesize() {
 #include <sys/mman.h>
 #include <unistd.h>
 
-void* _mga_mem_reserve(mga_u64 size) {
+static void* _mga_mem_reserve(mga_u64 size) {
     void* out = mmap(NULL, size, PROT_NONE, MAP_SHARED | MAP_ANONYMOUS, -1, (off_t)0);
     return out;
 }
-mga_b32 _mga_mem_commit(void* ptr, mga_u64 size) {
+static mga_b32 _mga_mem_commit(void* ptr, mga_u64 size) {
     mga_b32 out = (mprotect(ptr, size, PROT_READ | PROT_WRITE) == 0);
     return out;
 }
-void _mga_mem_decommit(void* ptr, mga_u64 size) {
+static void _mga_mem_decommit(void* ptr, mga_u64 size) {
     mprotect(ptr, size, PROT_NONE);
     madvise(ptr, size, MADV_DONTNEED);
 }
-void _mga_mem_release(void* ptr, mga_u64 size) {
+static void _mga_mem_release(void* ptr, mga_u64 size) {
     munmap(ptr, size);
 }
-mga_u32 _mga_mem_pagesize() {
+static mga_u32 _mga_mem_pagesize() {
     return (mga_u32)sysconf(_SC_PAGESIZE);
 }
 
@@ -282,11 +293,11 @@ mga_u32 _mga_mem_pagesize() {
 
 #ifdef MGA_PLATFORM_UNKNOWN
 
-void* _mga_mem_reserve(mga_u64 size) { MGA_UNUSED(size); return NULL; }
-void _mga_mem_commit(void* ptr, mga_u64 size) { MGA_UNUSED(ptr); MGA_UNUSED(size); }
-void _mga_mem_decommit(void* ptr, mga_u64 size) { MGA_UNUSED(ptr); MGA_UNUSED(size); }
-void _mga_mem_release(void* ptr, mga_u64 size) { MGA_UNUSED(ptr); MGA_UNUSED(size); }
-mga_u32 _mga_mem_pagesize(){ return 4096; }
+static void* _mga_mem_reserve(mga_u64 size) { MGA_UNUSED(size); return NULL; }
+static void _mga_mem_commit(void* ptr, mga_u64 size) { MGA_UNUSED(ptr); MGA_UNUSED(size); }
+static void _mga_mem_decommit(void* ptr, mga_u64 size) { MGA_UNUSED(ptr); MGA_UNUSED(size); }
+static void _mga_mem_release(void* ptr, mga_u64 size) { MGA_UNUSED(ptr); MGA_UNUSED(size); }
+static mga_u32 _mga_mem_pagesize(){ return 4096; }
 
 #endif // MGA_PLATFORM_UNKNOWN
 
@@ -303,19 +314,6 @@ static mga_u32 _mga_round_pow2(mga_u32 v) {
     return v;
 }
 
-static void _mga_empty_error_callback(mga_error error) {
-    MGA_UNUSED(error);
-}
-
-MGA_THREAD_VAR static mga_error last_error;
-mga_error mga_get_error(mg_arena* arena) {
-    return arena == NULL ? last_error : arena->_last_error;
-}
-
-mga_u64 mga_get_pos(mg_arena* arena) { return arena->_pos; }
-mga_u64 mga_get_size(mg_arena* arena) { return arena->_size; }
-mga_u32 mga_get_block_size(mg_arena* arena) { return arena->_block_size; }
-mga_u32 mga_get_align(mg_arena* arena) { return arena->_align; }
 
 typedef struct {
     mga_error_callback* error_callback;
@@ -323,6 +321,10 @@ typedef struct {
     mga_u32 block_size;
     mga_u32 align;
 } _mga_init_data;
+
+static void _mga_empty_error_callback(mga_error error) {
+    MGA_UNUSED(error);
+}
 
 static _mga_init_data _mga_init_common(const mga_desc* desc) {
     _mga_init_data out = { 0 };
@@ -344,20 +346,24 @@ static _mga_init_data _mga_init_common(const mga_desc* desc) {
     return out;
 }
 
-void* mga_push_zero(mg_arena* arena, mga_u64 size) {
-    mga_u8* out = mga_push(arena, size);
-    MGA_MEMSET(out, 0, size);
-    
-    return (void*)out;
-}
-
-void mga_pop_to(mg_arena* arena, mga_u64 pos) {
-    mga_pop(arena, arena->_pos - pos);
-}
+// This is an annoying placement, but
+// it has to be above the implementations that reference it
+static MGA_THREAD_VAR mga_error last_error;
 
 #ifdef MGA_FORCE_MALLOC
 
-mg_arena* mga_create(const mga_desc* desc) {
+/*
+Malloc Backend
+======================================================================
+  __  __   _   _    _    ___   ___   ___   _   ___ _  _____ _  _ ___  
+ |  \/  | /_\ | |  | |  / _ \ / __| | _ ) /_\ / __| |/ / __| \| |   \
+ | |\/| |/ _ \| |__| |_| (_) | (__  | _ \/ _ \ (__| ' <| _|| .` | |) |
+ |_|  |_/_/ \_\____|____\___/ \___| |___/_/ \_\___|_|\_\___|_|\_|___/ 
+
+======================================================================
+*/
+                                                                      
+MGA_FUNC_DEF mg_arena* mga_create(const mga_desc* desc) {
     _mga_init_data init_data = _mga_init_common(desc);
 
     mg_arena* out = (mg_arena*)malloc(sizeof(mg_arena));
@@ -386,7 +392,7 @@ mg_arena* mga_create(const mga_desc* desc) {
 
     return out;
 }
-void mga_destroy(mg_arena* arena) {
+MGA_FUNC_DEF void mga_destroy(mg_arena* arena) {
     _mga_malloc_node* node = arena->_malloc_backend.cur_node;
     while (node != NULL) {
         free(node->data);
@@ -399,7 +405,7 @@ void mga_destroy(mg_arena* arena) {
     free(arena);
 }
 
-void* mga_push(mg_arena* arena, mga_u64 size) {
+MGA_FUNC_DEF void* mga_push(mg_arena* arena, mga_u64 size) {
     if (arena->_pos + size > arena->_size) {
         last_error.code = MGA_ERR_OUT_OF_MEMORY;
         last_error.msg = "Arena ran out of memory";
@@ -450,7 +456,7 @@ void* mga_push(mg_arena* arena, mga_u64 size) {
     return out;
 }
 
-void mga_pop(mg_arena* arena, mga_u64 size) {
+MGA_FUNC_DEF void mga_pop(mg_arena* arena, mga_u64 size) {
     if (size > arena->_pos) {
         last_error.code = MGA_ERR_CANNOT_POP_MORE;
         last_error.msg = "Attempted to pop too much memory";
@@ -475,15 +481,26 @@ void mga_pop(mg_arena* arena, mga_u64 size) {
     arena->_pos -= size_left;
 }
 
-void mga_reset(mg_arena* arena) {
+MGA_FUNC_DEF void mga_reset(mg_arena* arena) {
     mga_pop_to(arena, 0);
 }
 
 #else // MGA_FORCE_MALLOC
 
+/*
+Low Level Backend
+================================================================================
+  _    _____      __  _    _____   _____ _      ___   _   ___ _  _____ _  _ ___  
+ | |  / _ \ \    / / | |  | __\ \ / / __| |    | _ ) /_\ / __| |/ / __| \| |   \
+ | |_| (_) \ \/\/ /  | |__| _| \ V /| _|| |__  | _ \/ _ \ (__| ' <| _|| .` | |) |
+ |____\___/ \_/\_/   |____|___| \_/ |___|____| |___/_/ \_\___|_|\_\___|_|\_|___/ 
+
+================================================================================
+*/
+
 #define MGA_MIN_POS MGA_ALIGN_UP_POW2(sizeof(mg_arena), 64) 
 
-mg_arena* mga_create(const mga_desc* desc) {
+MGA_FUNC_DEF mg_arena* mga_create(const mga_desc* desc) {
     _mga_init_data init_data = _mga_init_common(desc);
     
     mg_arena* out = MGA_MEM_RESERVE(init_data.max_size);
@@ -505,11 +522,11 @@ mg_arena* mga_create(const mga_desc* desc) {
 
     return out;
 }
-void mga_destroy(mg_arena* arena) {
+MGA_FUNC_DEF void mga_destroy(mg_arena* arena) {
     MGA_MEM_RELEASE(arena, arena->_size);
 }
 
-void* mga_push(mg_arena* arena, mga_u64 size) {
+MGA_FUNC_DEF void* mga_push(mg_arena* arena, mga_u64 size) {
     if (arena->_pos + size > arena->_size) {
         last_error.code = MGA_ERR_OUT_OF_MEMORY;
         last_error.msg = "Arena ran out of memory";
@@ -542,12 +559,14 @@ void* mga_push(mg_arena* arena, mga_u64 size) {
     return out;
 }
 
-void mga_pop(mg_arena* arena, mga_u64 size) {
+MGA_FUNC_DEF void mga_pop(mg_arena* arena, mga_u64 size) {
     if (size > arena->_pos - MGA_MIN_POS) {
         last_error.code = MGA_ERR_CANNOT_POP_MORE;
         last_error.msg = "Attempted to pop too much memory";
         arena->_last_error = last_error;
         arena->error_callback(last_error);
+
+        return;
     }
 
     arena->_pos = MGA_MAX(MGA_MIN_POS, arena->_pos - size);
@@ -562,20 +581,102 @@ void mga_pop(mg_arena* arena, mga_u64 size) {
     }
 }
 
-void mga_reset(mg_arena* arena) {
+MGA_FUNC_DEF void mga_reset(mg_arena* arena) {
     mga_pop_to(arena, MGA_MIN_POS);
 }
 
 #endif // NOT MGA_FORCE_MALLOC
 
-mga_temp mga_temp_begin(mg_arena* arena) {
+/*
+All Backends
+=========================================================
+    _   _    _      ___   _   ___ _  _____ _  _ ___  ___ 
+   /_\ | |  | |    | _ ) /_\ / __| |/ / __| \| |   \/ __|
+  / _ \| |__| |__  | _ \/ _ \ (__| ' <| _|| .` | |) \__ \
+ /_/ \_\____|____| |___/_/ \_\___|_|\_\___|_|\_|___/|___/
+
+=========================================================
+*/
+
+
+MGA_FUNC_DEF mga_error mga_get_error(mg_arena* arena) {
+    mga_error* err = arena == NULL ? &last_error : &arena->_last_error;
+    mga_error* temp = err;
+
+    *err = (mga_error){ MGA_ERR_NONE, "" };
+    
+    return *temp;
+}
+
+MGA_FUNC_DEF mga_u64 mga_get_pos(mg_arena* arena) { return arena->_pos; }
+MGA_FUNC_DEF mga_u64 mga_get_size(mg_arena* arena) { return arena->_size; }
+MGA_FUNC_DEF mga_u32 mga_get_block_size(mg_arena* arena) { return arena->_block_size; }
+MGA_FUNC_DEF mga_u32 mga_get_align(mg_arena* arena) { return arena->_align; }
+
+MGA_FUNC_DEF void* mga_push_zero(mg_arena* arena, mga_u64 size) {
+    mga_u8* out = mga_push(arena, size);
+    MGA_MEMSET(out, 0, size);
+    
+    return (void*)out;
+}
+
+MGA_FUNC_DEF void mga_pop_to(mg_arena* arena, mga_u64 pos) {
+    mga_pop(arena, arena->_pos - pos);
+}
+
+MGA_FUNC_DEF mga_temp mga_temp_begin(mg_arena* arena) {
     return (mga_temp){
         .arena = arena,
         ._pos = arena->_pos
     };
 }
-void mga_temp_end(mga_temp temp) {
+MGA_FUNC_DEF void mga_temp_end(mga_temp temp) {
     mga_pop_to(temp.arena, temp._pos);
+}
+
+#ifndef MGA_SCRATCH_COUNT
+#   define MGA_SCRATCH_COUNT 2
+#endif
+
+static MGA_THREAD_VAR mga_desc _mga_scratch_desc = {
+    .desired_max_size = MGA_MiB(64),
+    .desired_block_size = MGA_KiB(128)
+};
+static MGA_THREAD_VAR mg_arena* _mga_scratch_arenas[MGA_SCRATCH_COUNT] = { 0 };
+
+MGA_FUNC_DEF void mga_scratch_set_desc(mga_desc* desc) {
+    if (_mga_scratch_arenas[0] == NULL)
+        _mga_scratch_desc = *desc;
+}
+MGA_FUNC_DEF mga_temp mga_scratch_get(mg_arena** conflicts, mga_u32 num_conflicts) {
+    if (_mga_scratch_arenas[0] == NULL) {
+        for (mga_u32 i = 0; i < MGA_SCRATCH_COUNT; i++) {
+            _mga_scratch_arenas[i] = mga_create(&_mga_scratch_desc);
+        }
+    }
+
+    mga_temp out = { 0 };
+
+
+    for (mga_u32 i = 0; i < MGA_SCRATCH_COUNT; i++) {
+        mg_arena* arena = _mga_scratch_arenas[i];
+
+        mga_b32 in_conflict = MGA_FALSE;
+        for (mga_u32 j = 0; j < num_conflicts; j++) {
+            if (arena == conflicts[j]) {
+                in_conflict = MGA_TRUE;
+                break;
+            }
+        }
+        if (in_conflict) { continue; }
+
+        out = mga_temp_begin(arena);
+    }
+
+    return out;
+}
+MGA_FUNC_DEF void mga_scratch_release(mga_temp scratch) {
+    mga_temp_end(scratch);
 }
 
 #ifdef __cplusplus

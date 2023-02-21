@@ -8,13 +8,15 @@ An [STB-style](https://github.com/nothings/stb/blob/master/docs/stb_howto.txt) l
 - [Sokol Libraries](https://github.com/floooh/sokol)
 - [Metadesk](https://github.com/Dion-Systems/metadesk)
 
+**Many parts of the implementation are based on the implementation found in Metadesk**
+
 First off, if you are not already familiar with memory arenas, I recommend reading [this](https://www.rfleury.com/p/untangling-lifetimes-the-arena-allocator) article to know what they are and why they are useful.
 
 **TL;DR**: Arenas are strictly linear allocators that can be faster and easier to work with than the traditional `malloc` and `free` design pattern.
 
 ## Documentation
 
-
+- [Example](#example)
 - [Introduction](#introduction)
 - [Typedefs](#typedefs)
 - [Enums](#enums)
@@ -25,12 +27,49 @@ First off, if you are not already familiar with memory arenas, I recommend readi
 - [Error Handling](#error-handling)
 - [Platforms](#platforms)
 
-### Backends
+Backends
+--------
 
-`mg_arena` uses two different backends depending on the requirements of the application. There is a backend that uses `malloc` and `free`, and there is a backend that uses lower level functions like `VirtualAlloc` and `mmap`.**
+`mg_arena` uses two different backends depending on the requirements of the application. There is a backend that uses `malloc` and `free`, and there is a backend that uses lower level functions like `VirtualAlloc` and `mmap`.
 
 **NOTE: I recomend using the lower level one, unless you have a good reason not to.**
 
+Example
+-------
+```c
+#include <stdio.h>
+
+// You should put the implementation in a separate source file in a real project
+#define MG_ARENA_IMPL
+#include "mg_arena.h"
+
+void arena_error(mga_error err) {
+    fprintf(stderr, "MGA Error %d: %s\n", err.code, err.msg);
+}
+
+int main() {
+    mg_arena* arena = mga_create(&(mga_desc){
+        .desired_max_size = MGA_MiB(4),
+        .desired_block_size = MGA_KiB(256),
+        .error_callback = arena_error
+    });
+
+    int* data = (int*)mga_push(arena, sizeof(int) * 64);
+    for (int i = 0; i < 64; i++) {
+        data[i] = i;
+    }
+
+    printf("[ ");
+    for (int i = 0; i < 64; i++) {
+        printf("%d, ", data[i]);
+    }
+    printf("\b\b ]\n");
+
+    mga_destroy(arena);
+
+    return 0;
+}
+```
 
 Introduction
 ------------
@@ -81,6 +120,15 @@ int* data = (int*)mga_push(temp.arena, sizeof(int) * 16);
 
 mga_temp_end(temp);
 // data gets deallocated
+```
+
+Get temporary memory with scratch arenas:
+```c
+mga_temp scratch = mga_scratch_get(NULL, 0);
+
+int* data = (int*)mga_push(scratch.arena, sizeof(int) * 64);
+
+mga_scratch_release(scratch);
 ```
 
 Reset/clear arenas with `mga_reset`:
@@ -146,11 +194,11 @@ Enums
 Macros
 ------
 - `MGA_KiB(x)`
-    - Number of bytes per `x` kibibytes (1024)
+    - Number of bytes per `x` kibibytes (1,024)
 - `MGA_MiB(x)`
-    - Number of bytes per `x` mebibytes (1048576)
+    - Number of bytes per `x` mebibytes (1,048,576)
 - `MGA_GiB(x)`
-    - Number of bytes per `x` gibibytes (10737418240)
+    - Number of bytes per `x` gibibytes (1,073,741,824)
     
 - `MGA_PUSH_STRUCT(arena, type)`
     - Pushes a struct `type` onto `arena`
@@ -191,6 +239,7 @@ Functions
 ---------
 - `mg_arena* mga_create(const mga_desc* desc)` <br>
     - Creates a new `mg_arena` according to the mga_desc object.
+    - Returns NULL on failure, get the error with the callback function or with `mga_get_error`
 - `void mga_destroy(mg_arena* arena)` <br>
     - Destroys an `mg_arena` object.
 - `mga_error mga_get_error(mg_arena* arena)` <br>
@@ -202,14 +251,18 @@ Functions
     - (See `mga_desc` for more detail about what these mean)
 - `void* mga_push(mg_arena* arena, mga_u64 size)`
     - Allocates `size` bytes on the arena.
+    - Retruns NULL on failure
 - `void* mga_push_zero(mg_arena* arena, mga_u64 size)`
     - Allocates `size` bytes on the arena and zeros the memory.
+    - Returns NULL on failure
 - `void mga_pop(mg_arena* arena, mga_u64 size)`
     - Pops `size` bytes from the arena.
     - **WARNING: Because of memory alignment, this may not always act as expected. Make sure you know what you are doing.**
+    - Fails if you attempt to pop too much memory
 - `void mga_pop_to(mg_arena* arena, mga_u64 pos)`
     - Pops memory from the arena, setting the arenas position to `pos`.
     - **WARNING: Because of memory alignment, this may not always act as expected. Make sure you know what you are doing.**
+    - Fails if you attempt to pop too much memory
 - `void mga_reset(mg_arena* arena)`
     - Deallocates all memory in arena, returning the arena to its original position.
     - NOTE: Always use `mga_reset` instead of `mga_pop_to` if you need to clear all memory. Position 0 is not always the start of the arena. 
@@ -217,6 +270,26 @@ Functions
     - Creates a new temporary arena from the given arena.
 - `void mga_temp_end(mga_temp temp)`
     - Destroys the temporary arena, deallocating all allocations made with the temporary arena.
+- `void mga_scratch_set_desc(mga_desc* desc)`
+    - Sets the `mga_desc` used to initialize scratch arenas.
+    - NOTE: This will only work before any calls to `mga_scratch_get`
+    - The default desc has a `desired_max_size` of 64 MiB and a `desired_block_size` of 128 KiB
+- `mga_temp mga_scratch_get(mg_arena** conflicts, mga_u32 num_conflicts)`
+    - Gets a thread local scratch arena
+    - You can pass in a list of conflict scratch arenas. One example where this is useful is if you have a function that gets a scratch arena calling another function that gets another scratch arena:
+        - ```c
+          int* func_b(mg_arena* arena) {
+              mga_temp scratch = mga_scratch_get(&arena, 1);
+              // Do stuff
+              mga_scratch_release(scratch);
+          }
+          void func_a() {
+              mga_temp scratch = mga_scratch_get(NULL, 0);
+              func_b(scratch);
+              mga_scratch_release(scratch);
+          }
+- `void mga_scratch_release(mga_temp scratch)`
+    - Releases the scratch arena
 
 Definitions and Options
 -----------------------
@@ -238,12 +311,22 @@ Define these above where you put the implementation. Example:
     - Provide a custom implementation of `memset` to avoid the c standard library.
 - `MGA_THREAD_VAR`
     - Provide the implementation for creating a thread local variable if it is not supported.
+- `MGA_FUNC_DEF`
+    - Add custom prefix to all functions
+- `MGA_STATIC`
+    - Makes all functions static.
+- `MGA_DLL`
+    - Adds `__declspec(dllexport)` or `__declspec(dllimport)` to all functions.
+    - NOTE: `MGA_STATIC` and `MGA_DLL` do not work simultaneously and they do not work if you have defined `MGA_FNC_DEF`.
+- `MGA_SCRATCH_COUNT`
+    - Number of scratch arenas per thread
+    - Default is 2
 - `MGA_MEM_RESERVE` and related
-    - See [Other Platforms](#platforms)
+    - See [Platforms](#platforms)
 
 Error Handling
 --------------
-There are two ways to do error handling, you can use both or neither. **Error will not be displayed by default.** <br>
+There are two ways to do error handling, you can use both or neither. **Errors will not be displayed by default.** <br>
 An error has a code (`mga_error_code` enum) and a c string (`char*`) message;
 
 - Callback functions
@@ -319,7 +402,7 @@ To use the low level backend for an unknown platform, you have to create five fu
 // Returns pointer to data
 void* mem_reserve(uint64_t size);
 // Commits size bytes, starting at ptr
-// Returns 1 if successful, 0 if not
+// Returns 1 if the commit worked, 0 on failure
 int32_t mem_commit(void* ptr, uint64_t size);
 // Decommits size bytes, starting at ptr
 void mem_decommit(void* ptr, uint64_t size);
