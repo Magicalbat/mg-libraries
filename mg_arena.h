@@ -348,7 +348,7 @@ static _mga_init_data _mga_init_common(const mga_desc* desc) {
 
 // This is an annoying placement, but
 // it has to be above the implementations that reference it
-MGA_THREAD_VAR static mga_error last_error;
+static MGA_THREAD_VAR mga_error last_error;
 
 #ifdef MGA_FORCE_MALLOC
 
@@ -363,8 +363,6 @@ Malloc Backend
 ======================================================================
 */
                                                                       
-
-
 MGA_FUNC_DEF mg_arena* mga_create(const mga_desc* desc) {
     _mga_init_data init_data = _mga_init_common(desc);
 
@@ -640,11 +638,11 @@ MGA_FUNC_DEF void mga_temp_end(mga_temp temp) {
 #   define MGA_SCRATCH_COUNT 2
 #endif
 
-MGA_THREAD_VAR static mga_desc _mga_scratch_desc = {
+static MGA_THREAD_VAR mga_desc _mga_scratch_desc = {
     .desired_max_size = MGA_MiB(64),
     .desired_block_size = MGA_KiB(128)
 };
-MGA_THREAD_VAR static mg_arena* _mga_scratch_arenas[MGA_SCRATCH_COUNT] = { 0 };
+static MGA_THREAD_VAR mg_arena* _mga_scratch_arenas[MGA_SCRATCH_COUNT] = { 0 };
 
 MGA_FUNC_DEF void mga_scratch_set_desc(mga_desc* desc) {
     if (_mga_scratch_arenas[0] == NULL)
