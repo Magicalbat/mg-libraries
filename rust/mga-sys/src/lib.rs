@@ -404,16 +404,31 @@ macro_rules! mga_push_zero_array {
 }
 
 /// Returns number of bytes for given KiB (1,024 bytes).
+///
+/// ```
+/// # use mga_sys::mga_kib;
+/// assert_eq!(mga_kib(1), 1_024);
+/// ```
 pub const fn mga_kib(x: u64) -> u64 {
     x << 10
 }
 
 /// Returns number of bytes for given MiB (1,048,576 bytes).
+///
+/// ```
+/// # use mga_sys::mga_mib;
+/// assert_eq!(mga_mib(1), 1_048_576);
+/// ```
 pub const fn mga_mib(x: u64) -> u64 {
     x << 20
 }
 
 /// Returns number of bytes for given MiB (1,073,741,824 bytes).
+///
+/// ```
+/// # use mga_sys::mga_gib;
+/// assert_eq!(mga_gib(1), 1_073_741_824);
+/// ```
 pub const fn mga_gib(x: u64) -> u64 {
     x << 30
 }
