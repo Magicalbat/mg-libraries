@@ -115,6 +115,15 @@ extern "C" {
 
     /// Destroys the temporary arena, freeing all memory allocated in it.
     pub fn mga_temp_end(temp: MGATemp);
+
+    /// Configures the scratch arena to use the given [`MGADesc`] on initialization.
+    pub fn mga_scratch_set_desc(desc: *const MGADesc);
+
+    /// Gets a thread-local scratch arena.
+    pub fn mga_scratch_get(conflicts: *const *const MGArena, num_conflicts: u32) -> MGATemp;
+
+    /// Releases the scratch arena.
+    pub fn mga_scratch_release(scratch: MGATemp);
 }
 
 /// An arena that you can allocate data on, see [`mga_create`].
