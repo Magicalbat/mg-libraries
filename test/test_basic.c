@@ -4,6 +4,7 @@
 #include <string.h>
 
 #define MGA_STATIC
+#define MGA_FORCE_MALLOC
 #define MG_ARENA_IMPL
 #include "../mg_arena.h"
 
@@ -112,6 +113,22 @@ bool test_getters(void) {
     return true;
 }
 
+bool test_temp(void) {
+    mga_u64 start_pos = arena->_pos;
+    mga_temp temp = mga_temp_begin(arena);
+
+    TEST_ASSERT(temp._pos == arena->_pos, "temp begin");
+
+    mga_push(arena, arena->_block_size + 8);
+    mga_push(arena, arena->_block_size + 8);
+
+    mga_temp_end(temp);
+
+    TEST_ASSERT(start_pos == arena->_pos, "temp end");
+
+    return true;
+}
+
 bool test_destroy(void) {
     // I guess this only fails if there is a seg fault
     mga_destroy(arena);
@@ -124,6 +141,7 @@ bool test_destroy(void) {
     X(CREATE, create) \
     X(PUSH, push) \
     X(GETTERS, getters) \
+    X(TEMP, temp) \
     X(DESTROY, destroy)
 
 enum {
@@ -158,6 +176,7 @@ int main(int argc, char** argv) {
 
     uint32_t num_passed = 0;
     for (int i = 0; i < TEST_COUNT; i++) {
+        printf("%d\n", i);
         if (test_funcs[i]()) {
             if (!quiet)
                 printf(GRN_BG("Test passed:") " %s\n", test_names[i]);
@@ -170,7 +189,7 @@ int main(int argc, char** argv) {
     }
 
     if (!quiet) { puts(""); }
-    printf("Test Results: " GRN_BG("%d/%d passed") ", " RED_BG("%d/%d failed") "\n",
+    printf("Test Results: " GRN_BG("%d/%d passed") ", " RED_BG("%d/%d failed") ".\n",
         num_passed, TEST_COUNT, TEST_COUNT - num_passed, TEST_COUNT);
     
     return 0;

@@ -477,8 +477,10 @@ MGA_FUNC_DEF void mga_pop(mg_arena* arena, mga_u64 size) {
         free(temp);
     }
 
+    arena->_malloc_backend.cur_node = node;
+
     node->pos -= size_left;
-    arena->_pos -= size_left;
+    arena->_pos -= size;
 }
 
 MGA_FUNC_DEF void mga_reset(mg_arena* arena) {
