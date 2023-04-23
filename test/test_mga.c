@@ -4,7 +4,6 @@
 #include <string.h>
 
 #define MGA_STATIC
-#define MGA_FORCE_MALLOC
 #define MG_ARENA_IMPL
 #include "../mg_arena.h"
 
@@ -36,7 +35,9 @@ bool test_misc(void) {
     return true;
 }
 
-void test_error_callback(mga_error err) { (void)err; }
+void test_error_callback(mga_error err) { 
+    printf("MGA Error %u: %s\n", err.code, err.msg);
+}
 bool test_create(void) {
     arena = mga_create(&(mga_desc){
         .desired_max_size = MGA_MiB(4),
@@ -63,14 +64,14 @@ bool test_create(void) {
 
 bool test_push(void) {
     int* num_ptr = (int*)mga_push(arena, sizeof(int));
-    *num_ptr = 42;
     TEST_ASSERT(num_ptr != NULL, "Num ptr");
+    *num_ptr = 42;
 
     int* num_arr = (int*)mga_push(arena, sizeof(int) * 64);
+    TEST_ASSERT(num_arr != NULL, "num_arr");
     for (int i = 0; i < 64; i++) {
         num_arr[i] = 123;
     }
-    TEST_ASSERT(num_arr != NULL, "num_arr");
 
     int* zero_arr = (int*)mga_push_zero(arena, sizeof(int) * 256);
     for (int i = 0; i < 256; i++) {
@@ -78,8 +79,8 @@ bool test_push(void) {
     }
 
     float* test_float = MGA_PUSH_STRUCT(arena, float);
-    *test_float = 3.14159f;
     TEST_ASSERT(test_float != NULL, "PUSH_STRUCT");
+    *test_float = 3.14159f;
     
     float* zero_float = MGA_PUSH_ZERO_STRUCT(arena, float);
     TEST_ASSERT(test_float != NULL && *zero_float == 0.0f, "PUSH_STRUCT_ZERO");
@@ -98,6 +99,9 @@ bool test_push(void) {
         TEST_ASSERT(float_zeros[i] == 0, "PUSH_ZERO_ARRAY");
     }
 
+    char* large_alloc = (char*)mga_push(arena, MGA_KiB(512));
+    TEST_ASSERT(large_alloc != NULL, "large alloc");
+
     mga_error err = mga_get_error(arena);
     TEST_ASSERT(err.code == MGA_ERR_NONE, "got mga error");
 
@@ -109,6 +113,27 @@ bool test_getters(void) {
     TEST_ASSERT(mga_get_size(arena) == arena->_size, "get size");
     TEST_ASSERT(mga_get_block_size(arena) == arena->_block_size, "get block_size");
     TEST_ASSERT(mga_get_align(arena) == arena->_align, "get align");
+
+    return true;
+}
+
+bool test_pop(void) {
+    char* data = (char*)mga_push(arena, 1024);
+    (void)data;
+    mga_u64 start_pos = mga_get_pos(arena);
+
+    mga_pop(arena, 1024);
+
+    mga_u64 end_pos = mga_get_pos(arena);
+
+    TEST_ASSERT(start_pos - end_pos == 1024, "pop");
+
+    mga_reset(arena);
+#ifdef MGA_MIN_POS
+    TEST_ASSERT(mga_get_pos(arena) == MGA_MIN_POS, "reset");
+#else
+    TEST_ASSERT(mga_get_pos(arena) == 0, "reset");
+#endif
 
     return true;
 }
@@ -136,13 +161,52 @@ bool test_destroy(void) {
     return true;
 }
 
+bool test_scratch(void) {
+    mga_desc desc = {
+        .desired_max_size = MGA_MiB(1),
+        .error_callback = test_error_callback,
+    };
+    mga_scratch_set_desc(&desc);
+
+    mga_temp scratch0 = mga_scratch_get(NULL, 0);
+
+    TEST_ASSERT (
+        scratch0.arena->_size >= desc.desired_max_size && 
+        scratch0.arena->error_callback == test_error_callback,
+        "scratch set desc"
+    );
+    
+    mga_u64 spos0 = mga_get_pos(scratch0.arena);
+
+    char* data0 = mga_push(scratch0.arena, MGA_KiB(512));
+    TEST_ASSERT(data0 != NULL, "scratch push");
+
+    mga_temp scratch1 = mga_scratch_get(&scratch0.arena, 1);
+    TEST_ASSERT(scratch0.arena != scratch1.arena, "scratch conflicts");
+
+    mga_u64 spos1 = mga_get_pos(scratch1.arena);
+
+    char* data1 = mga_push(scratch1.arena, MGA_KiB(512));
+    TEST_ASSERT(data1 != NULL, "scratch push");
+
+    mga_scratch_release(scratch0);
+    mga_scratch_release(scratch1);
+
+    TEST_ASSERT(mga_get_pos(scratch0.arena) == spos0, "scratch release");
+    TEST_ASSERT(mga_get_pos(scratch1.arena) == spos1, "scratch release");
+
+    return true;
+}
+
 #define TEST_XLIST \
     X(MISC, misc) \
     X(CREATE, create) \
     X(PUSH, push) \
     X(GETTERS, getters) \
+    X(POP, pop) \
     X(TEMP, temp) \
-    X(DESTROY, destroy)
+    X(DESTROY, destroy) \
+    X(SCRATCH, scratch)
 
 enum {
 #define X(name, func_name) TEST_##name,
@@ -176,7 +240,6 @@ int main(int argc, char** argv) {
 
     uint32_t num_passed = 0;
     for (int i = 0; i < TEST_COUNT; i++) {
-        printf("%d\n", i);
         if (test_funcs[i]()) {
             if (!quiet)
                 printf(GRN_BG("Test passed:") " %s\n", test_names[i]);

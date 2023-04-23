@@ -130,7 +130,7 @@ typedef struct {
 MGA_FUNC_DEF mga_temp mga_temp_begin(mg_arena* arena);
 MGA_FUNC_DEF void mga_temp_end(mga_temp temp);
 
-MGA_FUNC_DEF void mga_scratch_set_desc(mga_desc* desc);
+MGA_FUNC_DEF void mga_scratch_set_desc(const mga_desc* desc);
 MGA_FUNC_DEF mga_temp mga_scratch_get(mg_arena** conflicts, mga_u32 num_conflicts);
 MGA_FUNC_DEF void mga_scratch_release(mga_temp scratch);
 
@@ -242,6 +242,7 @@ extern "C" {
 
 #include <Windows.h>
 
+#ifndef MGA_FORCE_MALLOC
 static void* _mga_mem_reserve(mga_u64 size) {
     void* out = VirtualAlloc(0, size, MEM_RESERVE, PAGE_READWRITE);
     return out;
@@ -257,6 +258,7 @@ static void _mga_mem_release(void* ptr, mga_u64 size) {
     MGA_UNUSED(size);
     VirtualFree(ptr, 0, MEM_RELEASE);
 }
+#endif
 static mga_u32 _mga_mem_pagesize() {
     SYSTEM_INFO si;
     GetSystemInfo(&si);
@@ -270,6 +272,7 @@ static mga_u32 _mga_mem_pagesize() {
 #include <sys/mman.h>
 #include <unistd.h>
 
+#ifndef MGA_FORCE_MALLOC
 static void* _mga_mem_reserve(mga_u64 size) {
     void* out = mmap(NULL, size, PROT_NONE, MAP_SHARED | MAP_ANONYMOUS, -1, (off_t)0);
     return out;
@@ -285,6 +288,7 @@ static void _mga_mem_decommit(void* ptr, mga_u64 size) {
 static void _mga_mem_release(void* ptr, mga_u64 size) {
     munmap(ptr, size);
 }
+#endif
 static mga_u32 _mga_mem_pagesize() {
     return (mga_u32)sysconf(_SC_PAGESIZE);
 }
@@ -293,10 +297,12 @@ static mga_u32 _mga_mem_pagesize() {
 
 #ifdef MGA_PLATFORM_UNKNOWN
 
+#ifndef MGA_FORCE_MALLOC
 static void* _mga_mem_reserve(mga_u64 size) { MGA_UNUSED(size); return NULL; }
 static void _mga_mem_commit(void* ptr, mga_u64 size) { MGA_UNUSED(ptr); MGA_UNUSED(size); }
 static void _mga_mem_decommit(void* ptr, mga_u64 size) { MGA_UNUSED(ptr); MGA_UNUSED(size); }
 static void _mga_mem_release(void* ptr, mga_u64 size) { MGA_UNUSED(ptr); MGA_UNUSED(size); }
+#endif
 static mga_u32 _mga_mem_pagesize(){ return 4096; }
 
 #endif // MGA_PLATFORM_UNKNOWN
@@ -641,14 +647,20 @@ MGA_FUNC_DEF void mga_temp_end(mga_temp temp) {
 #endif
 
 static MGA_THREAD_VAR mga_desc _mga_scratch_desc = {
-    .desired_max_size = MGA_MiB(64),
-    .desired_block_size = MGA_KiB(128)
+    .desired_max_size = MGA_MiB(8),
+    .desired_block_size = MGA_KiB(256)
 };
 static MGA_THREAD_VAR mg_arena* _mga_scratch_arenas[MGA_SCRATCH_COUNT] = { 0 };
 
-MGA_FUNC_DEF void mga_scratch_set_desc(mga_desc* desc) {
-    if (_mga_scratch_arenas[0] == NULL)
-        _mga_scratch_desc = *desc;
+MGA_FUNC_DEF void mga_scratch_set_desc(const mga_desc* desc) {
+    if (_mga_scratch_arenas[0] == NULL) {
+        _mga_scratch_desc = (mga_desc){
+            .desired_max_size = desc->desired_max_size,
+            .desired_block_size = desc->desired_block_size,
+            .align = desc->align,
+            .error_callback = desc->error_callback
+        };
+    }
 }
 MGA_FUNC_DEF mga_temp mga_scratch_get(mg_arena** conflicts, mga_u32 num_conflicts) {
     if (_mga_scratch_arenas[0] == NULL) {
@@ -658,7 +670,6 @@ MGA_FUNC_DEF mga_temp mga_scratch_get(mg_arena** conflicts, mga_u32 num_conflict
     }
 
     mga_temp out = { 0 };
-
 
     for (mga_u32 i = 0; i < MGA_SCRATCH_COUNT; i++) {
         mg_arena* arena = _mga_scratch_arenas[i];

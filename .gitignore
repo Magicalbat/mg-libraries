@@ -4,3 +4,4 @@ main.*
 replit.nix
 **.bat
 **.exe
+test/bin
