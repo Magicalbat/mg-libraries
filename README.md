@@ -270,7 +270,7 @@ Functions
     - Creates a new temporary arena from the given arena.
 - `void mga_temp_end(mga_temp temp)`
     - Destroys the temporary arena, deallocating all allocations made with the temporary arena.
-- `void mga_scratch_set_desc(mga_desc* desc)`
+- `void mga_scratch_set_desc(const mga_desc* desc)`
     - Sets the `mga_desc` used to initialize scratch arenas.
     - NOTE: This will only work before any calls to `mga_scratch_get`
     - The default desc has a `desired_max_size` of 64 MiB and a `desired_block_size` of 128 KiB
