@@ -166,7 +166,7 @@ extern "C" {
 #elif defined(__EMSCRIPTEN__)
 #    define MGA_PLATFORM_EMSCRIPTEN
 #else
-#    warning "MG ARENA: Unknown platform"
+#    warning "MGA: Unknown platform"
 #    define MGA_PLATFORM_UNKNOWN
 #endif
 
@@ -369,7 +369,7 @@ Malloc Backend
 ======================================================================
 */
                                                                       
-MGA_FUNC_DEF mg_arena* mga_create(const mga_desc* desc) {
+mg_arena* mga_create(const mga_desc* desc) {
     _mga_init_data init_data = _mga_init_common(desc);
 
     mg_arena* out = (mg_arena*)malloc(sizeof(mg_arena));
@@ -398,7 +398,7 @@ MGA_FUNC_DEF mg_arena* mga_create(const mga_desc* desc) {
 
     return out;
 }
-MGA_FUNC_DEF void mga_destroy(mg_arena* arena) {
+void mga_destroy(mg_arena* arena) {
     _mga_malloc_node* node = arena->_malloc_backend.cur_node;
     while (node != NULL) {
         free(node->data);
@@ -411,7 +411,7 @@ MGA_FUNC_DEF void mga_destroy(mg_arena* arena) {
     free(arena);
 }
 
-MGA_FUNC_DEF void* mga_push(mg_arena* arena, mga_u64 size) {
+void* mga_push(mg_arena* arena, mga_u64 size) {
     if (arena->_pos + size > arena->_size) {
         last_error.code = MGA_ERR_OUT_OF_MEMORY;
         last_error.msg = "Arena ran out of memory";
@@ -462,7 +462,7 @@ MGA_FUNC_DEF void* mga_push(mg_arena* arena, mga_u64 size) {
     return out;
 }
 
-MGA_FUNC_DEF void mga_pop(mg_arena* arena, mga_u64 size) {
+void mga_pop(mg_arena* arena, mga_u64 size) {
     if (size > arena->_pos) {
         last_error.code = MGA_ERR_CANNOT_POP_MORE;
         last_error.msg = "Attempted to pop too much memory";
@@ -489,7 +489,7 @@ MGA_FUNC_DEF void mga_pop(mg_arena* arena, mga_u64 size) {
     arena->_pos -= size;
 }
 
-MGA_FUNC_DEF void mga_reset(mg_arena* arena) {
+void mga_reset(mg_arena* arena) {
     mga_pop_to(arena, 0);
 }
 
@@ -508,7 +508,7 @@ Low Level Backend
 
 #define MGA_MIN_POS MGA_ALIGN_UP_POW2(sizeof(mg_arena), 64) 
 
-MGA_FUNC_DEF mg_arena* mga_create(const mga_desc* desc) {
+mg_arena* mga_create(const mga_desc* desc) {
     _mga_init_data init_data = _mga_init_common(desc);
     
     mg_arena* out = MGA_MEM_RESERVE(init_data.max_size);
@@ -530,11 +530,11 @@ MGA_FUNC_DEF mg_arena* mga_create(const mga_desc* desc) {
 
     return out;
 }
-MGA_FUNC_DEF void mga_destroy(mg_arena* arena) {
+void mga_destroy(mg_arena* arena) {
     MGA_MEM_RELEASE(arena, arena->_size);
 }
 
-MGA_FUNC_DEF void* mga_push(mg_arena* arena, mga_u64 size) {
+void* mga_push(mg_arena* arena, mga_u64 size) {
     if (arena->_pos + size > arena->_size) {
         last_error.code = MGA_ERR_OUT_OF_MEMORY;
         last_error.msg = "Arena ran out of memory";
@@ -567,7 +567,7 @@ MGA_FUNC_DEF void* mga_push(mg_arena* arena, mga_u64 size) {
     return out;
 }
 
-MGA_FUNC_DEF void mga_pop(mg_arena* arena, mga_u64 size) {
+void mga_pop(mg_arena* arena, mga_u64 size) {
     if (size > arena->_pos - MGA_MIN_POS) {
         last_error.code = MGA_ERR_CANNOT_POP_MORE;
         last_error.msg = "Attempted to pop too much memory";
@@ -589,7 +589,7 @@ MGA_FUNC_DEF void mga_pop(mg_arena* arena, mga_u64 size) {
     }
 }
 
-MGA_FUNC_DEF void mga_reset(mg_arena* arena) {
+void mga_reset(mg_arena* arena) {
     mga_pop_to(arena, MGA_MIN_POS);
 }
 
@@ -607,7 +607,7 @@ All Backends
 */
 
 
-MGA_FUNC_DEF mga_error mga_get_error(mg_arena* arena) {
+mga_error mga_get_error(mg_arena* arena) {
     mga_error* err = arena == NULL ? &last_error : &arena->_last_error;
     mga_error* temp = err;
 
@@ -616,29 +616,29 @@ MGA_FUNC_DEF mga_error mga_get_error(mg_arena* arena) {
     return *temp;
 }
 
-MGA_FUNC_DEF mga_u64 mga_get_pos(mg_arena* arena) { return arena->_pos; }
-MGA_FUNC_DEF mga_u64 mga_get_size(mg_arena* arena) { return arena->_size; }
-MGA_FUNC_DEF mga_u32 mga_get_block_size(mg_arena* arena) { return arena->_block_size; }
-MGA_FUNC_DEF mga_u32 mga_get_align(mg_arena* arena) { return arena->_align; }
+mga_u64 mga_get_pos(mg_arena* arena) { return arena->_pos; }
+mga_u64 mga_get_size(mg_arena* arena) { return arena->_size; }
+mga_u32 mga_get_block_size(mg_arena* arena) { return arena->_block_size; }
+mga_u32 mga_get_align(mg_arena* arena) { return arena->_align; }
 
-MGA_FUNC_DEF void* mga_push_zero(mg_arena* arena, mga_u64 size) {
+void* mga_push_zero(mg_arena* arena, mga_u64 size) {
     mga_u8* out = mga_push(arena, size);
     MGA_MEMSET(out, 0, size);
     
     return (void*)out;
 }
 
-MGA_FUNC_DEF void mga_pop_to(mg_arena* arena, mga_u64 pos) {
+void mga_pop_to(mg_arena* arena, mga_u64 pos) {
     mga_pop(arena, arena->_pos - pos);
 }
 
-MGA_FUNC_DEF mga_temp mga_temp_begin(mg_arena* arena) {
+mga_temp mga_temp_begin(mg_arena* arena) {
     return (mga_temp){
         .arena = arena,
         ._pos = arena->_pos
     };
 }
-MGA_FUNC_DEF void mga_temp_end(mga_temp temp) {
+void mga_temp_end(mga_temp temp) {
     mga_pop_to(temp.arena, temp._pos);
 }
 
@@ -652,7 +652,7 @@ static MGA_THREAD_VAR mga_desc _mga_scratch_desc = {
 };
 static MGA_THREAD_VAR mg_arena* _mga_scratch_arenas[MGA_SCRATCH_COUNT] = { 0 };
 
-MGA_FUNC_DEF void mga_scratch_set_desc(const mga_desc* desc) {
+void mga_scratch_set_desc(const mga_desc* desc) {
     if (_mga_scratch_arenas[0] == NULL) {
         _mga_scratch_desc = (mga_desc){
             .desired_max_size = desc->desired_max_size,
@@ -662,7 +662,7 @@ MGA_FUNC_DEF void mga_scratch_set_desc(const mga_desc* desc) {
         };
     }
 }
-MGA_FUNC_DEF mga_temp mga_scratch_get(mg_arena** conflicts, mga_u32 num_conflicts) {
+mga_temp mga_scratch_get(mg_arena** conflicts, mga_u32 num_conflicts) {
     if (_mga_scratch_arenas[0] == NULL) {
         for (mga_u32 i = 0; i < MGA_SCRATCH_COUNT; i++) {
             _mga_scratch_arenas[i] = mga_create(&_mga_scratch_desc);
@@ -688,7 +688,7 @@ MGA_FUNC_DEF mga_temp mga_scratch_get(mg_arena** conflicts, mga_u32 num_conflict
 
     return out;
 }
-MGA_FUNC_DEF void mga_scratch_release(mga_temp scratch) {
+void mga_scratch_release(mga_temp scratch) {
     mga_temp_end(scratch);
 }
 
@@ -710,7 +710,7 @@ License
 
 MIT License
 
-Copyright (c) 2022 Magicalbat
+Copyright (c) 2023 Magicalbat
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

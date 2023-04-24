@@ -1,7 +1,8 @@
 .ccls-cache
+.cache
 .replit
-main.*
 replit.nix
 **.bat
 **.exe
-test/bin
+bin
+**.json
