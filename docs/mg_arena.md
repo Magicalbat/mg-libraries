@@ -1,4 +1,4 @@
-# Magic Arena
+# MG Arena
 
 An [STB-style](https://github.com/nothings/stb/blob/master/docs/stb_howto.txt) library for creating [memory arenas](https://www.rfleury.com/p/untangling-lifetimes-the-arena-allocator).
 
