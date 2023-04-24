@@ -1,5 +1,6 @@
-.ccls-cache
 .cache
+.ccls-cache
+.ccls
 .replit
 replit.nix
 **.bat

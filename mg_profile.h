@@ -90,10 +90,67 @@ extern "C" {
 #   error "MGP: Unknown platform"
 #endif
 
+static const mgp_u64 _mgp_sec_mul[MGP_TIMEUNIT_COUNT] = {
+    1, 1e3, 1e6, 1e9
+};
+static const mgp_u64 _mgp_nsec_div[MGP_TIMEUNIT_COUNT] = {
+    1e9, 1e6, 1e3, 1
+};
+
 #if defined(MGP_PLATFORM_LINUX) || defined(MGP_PLATFORM_APPLE)
 
-#   error "TODO"
+#include <time.h>
+
+#ifdef MGP_PLATFORM_APPLE
+#    include <mach/clock.h>
+#    include <mach/mach.h>
+#endif
+
 // https://gist.github.com/jbenet/1087739
+
+void mgp_init(void) { }
+
+#if defined(MGP_PLATFORM_LINUX)
+#    define _MGP_UNIX_GET_TS(ts) do { \
+        clock_gettime(CLOCK_MONOTONIC, &ts); \
+    } while (0)
+#elif defined(MGP_PLATFORM_APPLE)
+#    define _MGP_UNIX_GET_TS(ts) do { \
+        clock_serv_t cclock; \
+        mach_timespec_t mts; \
+        host_get_clock_service(mach_host_self(), REALTIME_CLOCK, &cclock); \
+        clock_get_time(cclock, &mts); \
+        mach_port_deallocate(mach_task_self(), cclock); \
+        ts.tv_sec = mts.tv_sec; \
+        ts.tv_nsec = mts.tv_nsec; \
+    } while (0)
+#endif
+
+mgp_u64 mgp_gettime_s(void) { 
+    struct timespec ts = { 0 };
+    _MGP_UNIX_GET_TS(ts);
+    return ts.tv_sec * _mgp_sec_mul[MGP_SEC] + ts.tv_nsec / _mgp_nsec_div[MGP_SEC];
+}
+mgp_u64 mgp_gettime_ms(void) { 
+    struct timespec ts = { 0 };
+    _MGP_UNIX_GET_TS(ts);
+    return ts.tv_sec * _mgp_sec_mul[MGP_MILLI_SEC] + ts.tv_nsec / _mgp_nsec_div[MGP_MILLI_SEC];
+}
+mgp_u64 mgp_gettime_us(void) { 
+    struct timespec ts = { 0 };
+    _MGP_UNIX_GET_TS(ts);
+    return ts.tv_sec * _mgp_sec_mul[MGP_MICRO_SEC] + ts.tv_nsec / _mgp_nsec_div[MGP_MICRO_SEC];
+}
+mgp_u64 mgp_gettime_ns(void) { 
+    struct timespec ts = { 0 };
+    _MGP_UNIX_GET_TS(ts);
+    return ts.tv_sec * _mgp_sec_mul[MGP_NANO_SEC] + ts.tv_nsec / _mgp_nsec_div[MGP_NANO_SEC];
+}
+mgp_u64 mgp_gettime(mgp_time_unit unit) {
+    struct timespec ts = { 0 };
+    _MGP_UNIX_GET_TS(ts);
+    return ts.tv_sec * _mgp_sec_mul[unit] + ts.tv_nsec / _mgp_nsec_div[unit];
+}
 
 #elif defined(MGP_PLATFORM_WIN32)
 
@@ -116,9 +173,6 @@ void mgp_init(void) {
     timeBeginPeriod(1);
 }
 
-const static mgp_u64 _mgp_units_per_sec[MGP_TIMEUNIT_COUNT] = {
-    1, 1e3, 1e6, 1e9
-};
 
 #define _MGP_WIN_TIMEFUNC(units_per_sec) \
     LARGE_INTEGER perf_count = { 0 }; \
@@ -127,19 +181,19 @@ const static mgp_u64 _mgp_units_per_sec[MGP_TIMEUNIT_COUNT] = {
     return ticks * units_per_sec / ticks_per_s;
 
 mgp_u64 mgp_gettime_s(void) {
-    _MGP_WIN_TIMEFUNC(_mgp_units_per_sec[MGP_SEC]);
+    _MGP_WIN_TIMEFUNC(_mgp_sec_mul[MGP_SEC]);
 }
 mgp_u64 mgp_gettime_ms(void) {
-    _MGP_WIN_TIMEFUNC(_mgp_units_per_sec[MGP_MILLI_SEC]);
+    _MGP_WIN_TIMEFUNC(_mgp_sec_mul[MGP_MILLI_SEC]);
 }
 mgp_u64 mgp_gettime_us(void) {
-    _MGP_WIN_TIMEFUNC(_mgp_units_per_sec[MGP_MICRO_SEC]);
+    _MGP_WIN_TIMEFUNC(_mgp_sec_mul[MGP_MICRO_SEC]);
 }
 mgp_u64 mgp_gettime_ns(void) {
-    _MGP_WIN_TIMEFUNC(_mgp_units_per_sec[MGP_NANO_SEC]);
+    _MGP_WIN_TIMEFUNC(_mgp_sec_mul[MGP_NANO_SEC]);
 }
 mgp_u64 mgp_gettime(mgp_time_unit unit) {
-    _MGP_WIN_TIMEFUNC(_mgp_units_per_sec[unit]);
+    _MGP_WIN_TIMEFUNC(_mgp_sec_mul[unit]);
 }
 
 #endif // MGP_PLATFORM_WIN32
