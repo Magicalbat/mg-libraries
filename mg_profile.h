@@ -29,6 +29,9 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+// TODO: option string.h
+#include <string.h>
+#include <assert.h>
 
 typedef int8_t   mgp_i8;
 typedef int16_t  mgp_i16;
@@ -40,6 +43,12 @@ typedef uint32_t mgp_u32;
 typedef uint64_t mgp_u64;
 
 typedef mgp_i32 mgp_b32;
+
+typedef float mgp_f32;
+typedef double mgp_f64;
+
+static_assert(sizeof(mgp_f32) == 4, "MGP Required 4 bytes floats");
+static_assert(sizeof(mgp_f64) == 8, "MGP Required 8 bytes doubles");
 
 typedef enum {
     MGP_SEC = 0,
@@ -56,6 +65,23 @@ MGP_FUNC_DEF mgp_u64 mgp_gettime_ms(void);
 MGP_FUNC_DEF mgp_u64 mgp_gettime_us(void);
 MGP_FUNC_DEF mgp_u64 mgp_gettime_ns(void);
 MGP_FUNC_DEF mgp_u64 mgp_gettime(mgp_time_unit unit);
+
+typedef struct {
+    mgp_f64 total_time;
+    mgp_f64 average_time;
+} mgp_info;
+
+#define MGP_MAX_MULTI 4096
+typedef struct {
+    mgp_u32 size;
+    mgp_f64 total_times[MGP_MAX_MULTI];
+    mgp_f64 average_times[MGP_MAX_MULTI];
+} mgp_multi_info;
+
+typedef void(mgp_basic_func)(void*);
+
+MGP_FUNC_DEF mgp_info mgp_profile_basic(mgp_basic_func* func, void* func_arg, mgp_u64 iters, mgp_time_unit unit);
+MGP_FUNC_DEF void mgp_profile_multi_basic(mgp_basic_func* func, void* func_arg, mgp_u64 iters, mgp_u32 per_iter, mgp_time_unit unit, mgp_multi_info* out);
 
 #ifdef __cplusplus
 }
@@ -147,6 +173,9 @@ mgp_u64 mgp_gettime_ns(void) {
     return ts.tv_sec * _mgp_sec_mul[MGP_NANO_SEC] + ts.tv_nsec / _mgp_nsec_div[MGP_NANO_SEC];
 }
 mgp_u64 mgp_gettime(mgp_time_unit unit) {
+    if (unit < 0 || unit >= MGP_TIMEUNIT_COUNT)
+        return 0;
+    
     struct timespec ts = { 0 };
     _MGP_UNIX_GET_TS(ts);
     return ts.tv_sec * _mgp_sec_mul[unit] + ts.tv_nsec / _mgp_nsec_div[unit];
@@ -193,11 +222,57 @@ mgp_u64 mgp_gettime_ns(void) {
     _MGP_WIN_TIMEFUNC(_mgp_sec_mul[MGP_NANO_SEC]);
 }
 mgp_u64 mgp_gettime(mgp_time_unit unit) {
+    if (unit < 0 || unit >= MGP_TIMEUNIT_COUNT)
+        return 0;
     _MGP_WIN_TIMEFUNC(_mgp_sec_mul[unit]);
 }
 
 #endif // MGP_PLATFORM_WIN32
 
+mgp_info mgp_profile_basic(mgp_basic_func* func, void* func_arg, mgp_u64 iters, mgp_time_unit unit) {
+    mgp_info out = { 0 };
+
+    if (iters == 0)
+        return out;
+
+    for (mgp_u64 i = 0; i < iters; i++) {
+        mgp_u64 start = mgp_gettime(unit);
+        
+        func(func_arg);
+        
+        mgp_u64 end = mgp_gettime(unit);
+
+        out.total_time += (mgp_f64)(end - start);
+    }
+
+    out.average_time = out.total_time / iters;
+
+    return out;
+}
+
+void mgp_profile_multi_basic(mgp_basic_func* func, void* func_arg, mgp_u64 iters, mgp_u32 per_iter, mgp_time_unit unit, mgp_multi_info* out) {
+    if (iters > MGP_MAX_MULTI || per_iter == 0) {
+        return;
+    }
+    
+    out->size = iters;
+
+    for (mgp_u64 i = 0; i < iters; i++) {
+        out->total_times[i] = 0;
+
+        for (mgp_u64 j = 0; j < per_iter; j++) {
+            mgp_u64 start = mgp_gettime(unit);
+
+            func(func_arg);
+
+            mgp_u64 end = mgp_gettime(unit);
+            
+            out->total_times[i] += (mgp_f64)(end - start);
+        }
+        
+        out->average_times[i] = out->total_times[i] / per_iter;
+    }
+}
 
 #ifdef __cplusplus
 }
