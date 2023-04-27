@@ -336,7 +336,42 @@ void mgp_profile_multi_basic(const mgp_basic_desc* desc) {
     }
 }
 
-mgp_info mgp_profile_input_size(const mgp_input_size_desc* desc);
+mgp_info mgp_profile_input_size(const mgp_input_size_desc* desc) {
+    mgp_info out = { 0 };
+
+    if (desc->func == NULL)
+        return out;
+
+    mgp_u64 input_size = desc->input_start;
+    mgp_u64 step = desc->input_step;
+    if (step == 0) step = 1;
+
+    mgp_time_unit unit = desc->time_unit;
+    if (unit <= MGP_TIMEUNIT_NULL || unit >= MGP_TIMEUNIT_COUNT)
+        unit = MGP_MICRO_SEC;
+
+
+    mgp_u64 iters = 1;
+    if (desc->iters != 0)
+        iters = desc->iters;
+
+    for (mgp_u64 i = 0; i < iters; i++) {
+        mgp_u64 start = mgp_gettime(unit);
+        
+        desc->func(input_size, desc->func_arg);
+        
+        mgp_u64 end = mgp_gettime(unit);
+
+        input_size += step;
+
+        out.total_time += (mgp_f64)(end - start);
+    }
+
+    out.average_time = out.total_time / iters;
+
+    return out;
+
+}
 void mgp_profile_multi_input_size(const mgp_input_size_desc* desc) {
     if (desc->iters > MGP_MAX_MULTI_SIZE || desc->per_iter == 0 || desc->multi_out == NULL || desc->func == NULL) {
         // TODO: return value on success/failure?
