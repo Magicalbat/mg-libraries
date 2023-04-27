@@ -7,3 +7,4 @@ replit.nix
 **.exe
 bin
 **.json
+**.csv

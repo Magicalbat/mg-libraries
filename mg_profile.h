@@ -29,6 +29,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#include <inttypes.h>
 // TODO: option string.h
 #include <string.h>
 #include <assert.h>
@@ -50,11 +51,15 @@ typedef double mgp_f64;
 static_assert(sizeof(mgp_f32) == 4, "MGP Required 4 bytes floats");
 static_assert(sizeof(mgp_f64) == 8, "MGP Required 8 bytes doubles");
 
+#define MGP_FALSE 0
+#define MGP_TRUE 1
+
 typedef enum {
-    MGP_SEC = 0,
-    MGP_MILLI_SEC = 1,
-    MGP_MICRO_SEC = 2,
-    MGP_NANO_SEC = 3,
+    MGP_TIMEUNIT_NULL = 0,
+    MGP_SEC,
+    MGP_MILLI_SEC,
+    MGP_MICRO_SEC,
+    MGP_NANO_SEC,
     MGP_TIMEUNIT_COUNT
 } mgp_time_unit;
 
@@ -71,17 +76,56 @@ typedef struct {
     mgp_f64 average_time;
 } mgp_info;
 
-#define MGP_MAX_MULTI 4096
+#define MGP_MAX_MULTI_SIZE 1024
 typedef struct {
     mgp_u32 size;
-    mgp_f64 total_times[MGP_MAX_MULTI];
-    mgp_f64 average_times[MGP_MAX_MULTI];
+    mgp_u64 input_sizes[MGP_MAX_MULTI_SIZE];
+    mgp_f64 total_times[MGP_MAX_MULTI_SIZE];
+    mgp_f64 average_times[MGP_MAX_MULTI_SIZE];
 } mgp_multi_info;
 
 typedef void(mgp_basic_func)(void*);
+typedef void(mgp_input_size_func)(mgp_u64, void*);
 
-MGP_FUNC_DEF mgp_info mgp_profile_basic(mgp_basic_func* func, void* func_arg, mgp_u64 iters, mgp_time_unit unit);
-MGP_FUNC_DEF void mgp_profile_multi_basic(mgp_basic_func* func, void* func_arg, mgp_u64 iters, mgp_u32 per_iter, mgp_time_unit unit, mgp_multi_info* out);
+typedef struct {
+    mgp_basic_func* func;
+    void* func_arg;
+    mgp_u32 iters;
+    mgp_time_unit time_unit;
+
+    mgp_u32 per_iter;
+    mgp_multi_info* multi_out;
+} mgp_basic_desc;
+
+typedef struct {
+    mgp_input_size_func* func;
+    void* func_arg;
+    mgp_u64 input_start;
+    mgp_u64 input_step;
+    mgp_u32 iters;
+    mgp_time_unit time_unit;
+
+    mgp_u32 per_iter;
+    mgp_multi_info* multi_out;
+} mgp_input_size_desc;
+
+MGP_FUNC_DEF mgp_info mgp_profile_basic(const mgp_basic_desc* desc);
+MGP_FUNC_DEF void mgp_profile_multi_basic(const mgp_basic_desc* desc);
+MGP_FUNC_DEF mgp_info mgp_profile_input_size(const mgp_input_size_desc* desc);
+MGP_FUNC_DEF void mgp_profile_multi_input_size(const mgp_input_size_desc* desc);
+
+#ifndef MGP_NO_STDIO
+
+#include <stdio.h>
+
+typedef enum {
+    MGP_MFILE_CSV,
+    MGP_MFILE_JSON,
+} mgp_multi_filetype;
+
+MGP_FUNC_DEF void mgp_multi_output_file(FILE* file, mgp_multi_filetype filetype, const mgp_multi_info* multi);
+
+#endif
 
 #ifdef __cplusplus
 }
@@ -117,10 +161,10 @@ extern "C" {
 #endif
 
 static const mgp_u64 _mgp_sec_mul[MGP_TIMEUNIT_COUNT] = {
-    1, 1e3, 1e6, 1e9
+    1, 1, 1e3, 1e6, 1e9
 };
 static const mgp_u64 _mgp_nsec_div[MGP_TIMEUNIT_COUNT] = {
-    1e9, 1e6, 1e3, 1
+    1, 1e9, 1e6, 1e3, 1
 };
 
 #if defined(MGP_PLATFORM_LINUX) || defined(MGP_PLATFORM_APPLE)
@@ -173,7 +217,7 @@ mgp_u64 mgp_gettime_ns(void) {
     return ts.tv_sec * _mgp_sec_mul[MGP_NANO_SEC] + ts.tv_nsec / _mgp_nsec_div[MGP_NANO_SEC];
 }
 mgp_u64 mgp_gettime(mgp_time_unit unit) {
-    if (unit < 0 || unit >= MGP_TIMEUNIT_COUNT)
+    if (unit <= MGP_TIMEUNIT_NULL || unit >= MGP_TIMEUNIT_COUNT)
         return 0;
     
     struct timespec ts = { 0 };
@@ -222,23 +266,32 @@ mgp_u64 mgp_gettime_ns(void) {
     _MGP_WIN_TIMEFUNC(_mgp_sec_mul[MGP_NANO_SEC]);
 }
 mgp_u64 mgp_gettime(mgp_time_unit unit) {
-    if (unit < 0 || unit >= MGP_TIMEUNIT_COUNT)
+    if (unit <= MGP_TIMEUNIT_NULL || unit >= MGP_TIMEUNIT_COUNT)
         return 0;
+    
     _MGP_WIN_TIMEFUNC(_mgp_sec_mul[unit]);
 }
 
 #endif // MGP_PLATFORM_WIN32
 
-mgp_info mgp_profile_basic(mgp_basic_func* func, void* func_arg, mgp_u64 iters, mgp_time_unit unit) {
+mgp_info mgp_profile_basic(const mgp_basic_desc* desc) {
     mgp_info out = { 0 };
 
-    if (iters == 0)
+    if (desc->func == NULL)
         return out;
+
+    mgp_time_unit unit = desc->time_unit;
+    if (unit <= MGP_TIMEUNIT_NULL || unit >= MGP_TIMEUNIT_COUNT)
+        unit = MGP_MICRO_SEC;
+
+    mgp_u64 iters = 1;
+    if (desc->iters != 0)
+        iters = desc->iters;
 
     for (mgp_u64 i = 0; i < iters; i++) {
         mgp_u64 start = mgp_gettime(unit);
         
-        func(func_arg);
+        desc->func(desc->func_arg);
         
         mgp_u64 end = mgp_gettime(unit);
 
@@ -250,29 +303,146 @@ mgp_info mgp_profile_basic(mgp_basic_func* func, void* func_arg, mgp_u64 iters, 
     return out;
 }
 
-void mgp_profile_multi_basic(mgp_basic_func* func, void* func_arg, mgp_u64 iters, mgp_u32 per_iter, mgp_time_unit unit, mgp_multi_info* out) {
-    if (iters > MGP_MAX_MULTI || per_iter == 0) {
+void mgp_profile_multi_basic(const mgp_basic_desc* desc) {
+    if (desc->iters > MGP_MAX_MULTI_SIZE || desc->per_iter == 0 || desc->multi_out == NULL || desc->func == NULL) {
+        // TODO: return value on success/failure?
         return;
     }
     
-    out->size = iters;
+    desc->multi_out->size = desc->iters;
 
-    for (mgp_u64 i = 0; i < iters; i++) {
-        out->total_times[i] = 0;
+    memset(desc->multi_out->input_sizes, 0, sizeof(desc->multi_out->input_sizes));
+    memset(desc->multi_out->total_times, 0, sizeof(desc->multi_out->total_times));
+    memset(desc->multi_out->average_times, 0, sizeof(desc->multi_out->average_times));
 
-        for (mgp_u64 j = 0; j < per_iter; j++) {
+    mgp_time_unit unit = desc->time_unit;
+    if (unit == MGP_TIMEUNIT_NULL)
+        unit = MGP_MICRO_SEC;
+
+    for (mgp_u64 i = 0; i < desc->iters; i++) {
+        desc->multi_out->total_times[i] = 0;
+
+        for (mgp_u64 j = 0; j < desc->per_iter; j++) {
             mgp_u64 start = mgp_gettime(unit);
 
-            func(func_arg);
+            desc->func(desc->func_arg);
 
             mgp_u64 end = mgp_gettime(unit);
             
-            out->total_times[i] += (mgp_f64)(end - start);
+            desc->multi_out->total_times[i] += (mgp_f64)(end - start);
         }
         
-        out->average_times[i] = out->total_times[i] / per_iter;
+        desc->multi_out->average_times[i] = desc->multi_out->total_times[i] / desc->per_iter;
     }
 }
+
+mgp_info mgp_profile_input_size(const mgp_input_size_desc* desc);
+void mgp_profile_multi_input_size(const mgp_input_size_desc* desc) {
+    if (desc->iters > MGP_MAX_MULTI_SIZE || desc->per_iter == 0 || desc->multi_out == NULL || desc->func == NULL) {
+        // TODO: return value on success/failure?
+        return;
+    }
+    
+    desc->multi_out->size = desc->iters;
+
+    memset(desc->multi_out->input_sizes, 0, sizeof(desc->multi_out->input_sizes));
+    memset(desc->multi_out->total_times, 0, sizeof(desc->multi_out->total_times));
+    memset(desc->multi_out->average_times, 0, sizeof(desc->multi_out->average_times));
+
+    mgp_u64 input_size = desc->input_start;
+    mgp_u64 step = desc->input_step;
+    if (step == 0) step = 1;
+
+    mgp_time_unit unit = desc->time_unit;
+    if (unit == MGP_TIMEUNIT_NULL)
+        unit = MGP_MICRO_SEC;
+
+    for (mgp_u64 i = 0; i < desc->iters; i++) {
+        desc->multi_out->total_times[i] = 0;
+
+        for (mgp_u64 j = 0; j < desc->per_iter; j++) {
+            mgp_u64 start = mgp_gettime(unit);
+
+            desc->func(input_size, desc->func_arg);
+
+            mgp_u64 end = mgp_gettime(unit);
+
+            desc->multi_out->total_times[i] += (mgp_f64)(end - start);
+        }
+        
+        input_size += step;
+        
+        desc->multi_out->average_times[i] = desc->multi_out->total_times[i] / desc->per_iter;
+    }
+}
+
+#ifndef MGP_NO_STDIO
+
+static void _mgp_multi_output_csv(FILE* out_file, mgp_b32 output_input_sizes, const mgp_multi_info* multi);
+static void _mgp_multi_output_json(FILE* out_file, mgp_b32 output_input_sizes, const mgp_multi_info* multi);
+
+void mgp_multi_output_file(FILE* out_file, mgp_multi_filetype filetype, const mgp_multi_info* multi) {
+    mgp_b32 output_inputiszes = MGP_FALSE;
+    for (mgp_u32 i = 0; i < multi->size; i++) {
+        if (multi->input_sizes[i] != 0) {
+            output_inputiszes = MGP_TRUE;
+            break;
+        }
+    }
+
+    switch (filetype) {
+        case MGP_MFILE_CSV: {
+            _mgp_multi_output_csv(out_file, output_inputiszes, multi);
+        } break;
+        case MGP_MFILE_JSON: {
+            _mgp_multi_output_json(out_file, output_inputiszes, multi);
+        } break;
+        default: break;
+    }
+}
+
+static void _mgp_multi_output_csv(FILE* out_file, mgp_b32 output_input_sizes, const mgp_multi_info* multi) {
+    if (output_input_sizes) {
+        fprintf(out_file, "input_size,average_time,total_time\n");
+        
+        for (mgp_u32 i = 0; i < multi->size; i++) {
+            fprintf(out_file, "%" PRIu64 ",%f,%.2f\n", multi->input_sizes[i], multi->average_times[i], multi->total_times[i]);
+        }
+    } else {
+        fprintf(out_file, "average_time,total_time\n");
+        
+        for (mgp_u32 i = 0; i < multi->size; i++) {
+            fprintf(out_file, "%f,%.2f\n", multi->average_times[i], multi->total_times[i]);
+        }
+    }
+
+}
+
+static void _mgp_multi_output_json(FILE* out_file, mgp_b32 output_input_sizes, const mgp_multi_info* multi) {
+    fprintf(out_file, "{\n");
+
+    if (output_input_sizes) {
+        fprintf(out_file, "  \"input_sizes\": [");
+        for (mgp_u32 i = 0; i < multi->size - 1; i++) {
+            fprintf(out_file, "%" PRIu64 ", ", multi->input_sizes[i]);
+        }
+        fprintf(out_file, "%" PRIu64 "],\n", multi->input_sizes[multi->size - 1]);
+    }
+
+    fprintf(out_file, "  \"average_times\": [");
+    for (mgp_u32 i = 0; i < multi->size - 1; i++) {
+        fprintf(out_file, "%f, ", multi->average_times[i]);
+    }
+    fprintf(out_file, "%f],\n", multi->average_times[multi->size - 1]);
+    
+    fprintf(out_file, "  \"total_times\": [");
+    for (mgp_u32 i = 0; i < multi->size - 1; i++) {
+        fprintf(out_file, "%.2f, ", multi->total_times[i]);
+    }
+    fprintf(out_file, "%.2f]\n}", multi->total_times[multi->size - 1]);
+}
+
+#endif
 
 #ifdef __cplusplus
 }
