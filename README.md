@@ -5,7 +5,7 @@
 | Library | Docs | Description |
 | ------- | ---- | ----------- |
 | [mg_arena.h](mg_arena.h) | [MG Arena](docs/mg_arena.md) | Arena Memory Managment |
-| [mg_plot.h](mg_plot.h) | [MG Plot (TODO)]() | Plotting library |
+| [mg_plot.h](mg_plot.h) | [MG Plot](docs/mg_plot.md) | Plotting library |
 
 ## General Installation
 Generally, to use one of these libraries, you should make a separate file (something like `mg_impl.c`), and put the following in the file:
@@ -82,6 +82,22 @@ Example:
 
 ![MG Plot Example Image](/docs/res/mgp_example.png)
 
+mg_impl.c:
+```c
+// Required by mg_plot.h
+#include "mg_arena.h"
+
+// Optionally
+#include "stb_image_write.h"
+
+#define MG_ARENA_IMPL
+#include "mg_arena.h"
+
+#define MG_PLOT_IMPL
+#include "mg_plot.h"
+```
+
+main.c:
 ```c
 #include <stdlib.h>
 
