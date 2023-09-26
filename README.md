@@ -78,10 +78,10 @@ A library for creating plots. It is basically a C imitaion of [matplotlib](https
     - Linux: Link with m, X11, GL, and GLX
         - `clang main.c mg_impl.c -lm -lX11 -lGL -lGLX -o main`
 
-
-[MG Plot Example Image](/docs/res/mgp_example.png)
-
 Example:
+
+![MG Plot Example Image](/docs/res/mgp_example.png)
+
 ```c
 #include <stdlib.h>
 
