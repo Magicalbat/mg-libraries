@@ -30,12 +30,8 @@ extern "C" {
 
 #include <stdint.h>
 
-typedef int8_t   mga_i8;
-typedef int16_t  mga_i16;
 typedef int32_t  mga_i32;
-typedef int64_t  mga_i64;
 typedef uint8_t  mga_u8;
-typedef uint16_t mga_u16;
 typedef uint32_t mga_u32;
 typedef uint64_t mga_u64;
 

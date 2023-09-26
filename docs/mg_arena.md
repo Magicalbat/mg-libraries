@@ -153,18 +153,10 @@ mga_destroy(arena);
 
 Typedefs
 --------
-- `mga_i8`
-    - 8 bit signed integer
-- `mga_i16`
-    - 16 bit signed integer
 - `mga_i32`
     - 32 bit signed integer
-- `mga_i64`
-    - 64 bit signed integer
 - `mga_u8`
     - 8 bit unsigned integer
-- `mga_u16`
-    - 16 bit unsigned integer
 - `mga_u32`
     - 32 bit unsigned integer
 - `mga_u64`
