@@ -160,7 +160,7 @@ void mgp_rects_ex(mgp_u32 num_rects, mgp_rectf* rects, mgp_vec4f color, mgp_vec4
 void mgp_quads_ex(mgp_u32 num_quads, mgp_quadf* quads, mgp_vec4f color, mgp_vec4f* colors, mgp_string8 label);
 
 #define mgp_points(num_points, xs, ys) mgp_points_ex(num_points, xs, ys, 3.0f, (mgp_vec4f){ 0 }, (void*)0, (mgp_string8){ 0 })
-#define mgp_lines(num_points, xs, ys) mgp_lines_ex(num_points, xs, ys, 2.0f, mgp_LINE_SOLID, (mgp_vec4f){ 0 }, (void*)0, (mgp_string8){ 0 })
+#define mgp_lines(num_points, xs, ys) mgp_lines_ex(num_points, xs, ys, 2.0f, MGP_LINE_SOLID, (mgp_vec4f){ 0 }, (void*)0, (mgp_string8){ 0 })
 #define mgp_rects(num_rects, rects) mgp_rects_ex(num_rects, rects, (mgp_vec4f){ 0 }, (void*)0, (mgp_string8){ 0 })
 #define mgp_quads(num_quads, quads) mgp_quads_ex(num_quads, quads, (mgp_vec4f){ 0 }, (void*)0, (mgp_string8){ 0 })
 
