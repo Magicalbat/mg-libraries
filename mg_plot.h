@@ -10,7 +10,7 @@ typedef int8_t   mgp_i8;
 typedef int32_t  mgp_i32;
 typedef int64_t  mgp_i64;
 typedef uint8_t  mgp_u8;
-typedef uint8_t  mgp_u16;
+typedef uint16_t mgp_u16;
 typedef uint32_t mgp_u32;
 typedef uint64_t mgp_u64;
 
