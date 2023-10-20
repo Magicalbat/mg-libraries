@@ -115,8 +115,8 @@ MGA_FUNC_DEF void mga_reset(mg_arena* arena);
 
 #define MGA_PUSH_STRUCT(arena, type) (type*)mga_push(arena, sizeof(type))
 #define MGA_PUSH_ZERO_STRUCT(arena, type) (type*)mga_push_zero(arena, sizeof(type))
-#define MGA_PUSH_ARRAY(arena, type, num) (type*)mga_push(arena, sizeof(type) * num)
-#define MGA_PUSH_ZERO_ARRAY(arena, type, num) (type*)mga_push_zero(arena, sizeof(type) * num)
+#define MGA_PUSH_ARRAY(arena, type, num) (type*)mga_push(arena, sizeof(type) * (num))
+#define MGA_PUSH_ZERO_ARRAY(arena, type, num) (type*)mga_push_zero(arena, sizeof(type) * (num))
 
 typedef struct {
     mg_arena* arena;
