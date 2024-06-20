@@ -509,6 +509,13 @@ mg_arena* mga_create(const mga_desc* desc) {
     
     mg_arena* out = MGA_MEM_RESERVE(init_data.max_size);
 
+    if (out == NULL) {
+        last_error.code = MGA_ERR_INIT_FAILED;
+        last_error.msg = "Failed to reserve initial memory for arena";
+        init_data.error_callback(last_error);
+        return NULL;
+    }
+
     if (!MGA_MEM_COMMIT(out, init_data.block_size)) {
         last_error.code = MGA_ERR_INIT_FAILED;
         last_error.msg = "Failed to commit initial memory for arena";

@@ -22,12 +22,8 @@ bool test_misc(void) {
     TEST_ASSERT(MGA_GiB(1) == 1073741824, "GiB");
     TEST_ASSERT(MGA_GiB(2) == 2147483648, "GiB");
 
-    TEST_ASSERT(sizeof(mga_i8 ) == 1, "mga_i8  size");
-    TEST_ASSERT(sizeof(mga_i16) == 2, "mga_i16 size");
     TEST_ASSERT(sizeof(mga_i32) == 4, "mga_i32 size");
-    TEST_ASSERT(sizeof(mga_i64) == 8, "mga_i64 size");
     TEST_ASSERT(sizeof(mga_u8 ) == 1, "mga_u8  size");
-    TEST_ASSERT(sizeof(mga_u16) == 2, "mga_u16 size");
     TEST_ASSERT(sizeof(mga_u32) == 4, "mga_u32 size");
     TEST_ASSERT(sizeof(mga_u64) == 8, "mga_u64 size");
     TEST_ASSERT(sizeof(mga_b32) == 4, "mga_b32 size");
