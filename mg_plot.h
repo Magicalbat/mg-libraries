@@ -140,9 +140,9 @@ typedef enum {
     MGP_ALIGN_LEFT,
 } mgp_legend_align;
 
-void mgp_init();
+void mgp_init(void);
 void mgp_cmd_push(const mgp_draw_cmd* cmd);
-void mgp_plot_show();
+void mgp_plot_show(void);
 
 void mgp_enable_legend(mgp_legend_align align);
 
@@ -447,7 +447,7 @@ static mgp_view _mgp_view = { 0 };
 static mgp_string8 _mgp_title = { 0 };
 
 
-void mgp_init() {
+void mgp_init(void) {
     if (_mgp_arena == NULL) {
         mga_desc desc = {
             .desired_max_size = MGA_MiB(4),
@@ -896,7 +896,7 @@ static void _init_text_batch(_mgp_state* state, _text_batch* text_batch);
 static void _draw_text_batch(_mgp_state* state, _text_batch* text_batch);
 static void _delete_text_batch(_text_batch* text_batch);
 
-void mgp_plot_show() {
+void mgp_plot_show(void) {
     _mgp_state state = { 0 };
 
     if (_mgp_title.size == 0) {
