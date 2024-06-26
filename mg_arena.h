@@ -231,7 +231,7 @@ extern "C" {
 #define MGA_MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MGA_MAX(a, b) ((a) > (b) ? (a) : (b))
 
-#define MGA_ALIGN_UP_POW2(x, b) (((x) + ((b) - 1)) & (~((b) - 1)))
+#define MGA_ALIGN_UP_POW2(x, b) (((mga_u64)(x) + ((mga_u64)(b) - 1)) & (~((mga_u64)(b) - 1)))
 
 #ifdef MGA_PLATFORM_WIN32
 
