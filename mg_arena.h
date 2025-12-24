@@ -616,11 +616,11 @@ All Backends
 
 mga_error mga_get_error(mg_arena* arena) {
     mga_error* err = arena == NULL ? &last_error : &arena->_last_error;
-    mga_error* temp = err;
+    mga_error temp = *err;
 
     *err = (mga_error){ MGA_ERR_NONE, "" };
     
-    return *temp;
+    return temp;
 }
 
 mga_u64 mga_get_pos(mg_arena* arena) { return arena->_pos; }
